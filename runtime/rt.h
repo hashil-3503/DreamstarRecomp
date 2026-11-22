@@ -69,6 +69,7 @@ extern uint64_t g_guest_lo;
 #define GUEST_HI         (GUEST_LO + GUEST_SIZE)
 #define MAIN_BASE        (GUEST_LO + 0x0000000000ull)
 #define SDK_BASE         (GUEST_LO + 0x0004000000ull)
+#define SUBSDK0_BASE     (GUEST_LO + 0x0008000000ull)   // (Kirby: multimedia; not on iOS, whose HLE_OFF is here)
 #define HLE_BASE         (GUEST_LO + HLE_OFF)            // fake addresses for host-implemented functions
 #define HLE_SIZE         0x0000100000ull
 #define TLS_BASE         (GUEST_LO + TLS_OFF)

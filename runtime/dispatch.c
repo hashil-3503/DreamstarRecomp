@@ -9,7 +9,8 @@
 #include "hle.h"
 
 typedef struct { const uint64_t *addrs; const GuestFn *fns; uint64_t count, lo, hi; } FnTable;
-static FnTable tables[2];
+static FnTable tables[3];
+static int ntables = 2;  // (3 with subsdk0)
 
 // HLE stubs live at fake addresses HLE_BASE + 16*i
 #define MAX_HLE 4096
@@ -114,12 +115,13 @@ void *hle_alloc(uint64_t size) {
 
 void dispatch_init(void) {  // (after gamelib_load)
     const GameLibTables *g = gamelib_tables();
-    uint64_t nm = *g->main_count, ns = *g->sdk_count;
+    uint64_t nm = *g->main_count, ns = *g->sdk_count, nu = *g->sub_count;
+    ntables = nu ? 3 : 2;
 #ifdef LARECOMP_DYN_BASE
     // The library lists the game's own addresses (the generator's --dyn-base): moved to where the window is (rt.h).
-    static uint64_t *moved[2];
-    const uint64_t *src[2] = {g->main_addrs, g->sdk_addrs}, cnt[2] = {nm, ns};
-    for (int t = 0; t < 2; t++) {
+    static uint64_t *moved[3];
+    const uint64_t *src[3] = {g->main_addrs, g->sdk_addrs, g->sub_addrs}, cnt[3] = {nm, ns, nu};
+    for (int t = 0; t < ntables; t++) {
         free(moved[t]);
         moved[t] = malloc(cnt[t] * sizeof *moved[t]);
         if (!moved[t]) FATAL("out of memory\n");
@@ -127,14 +129,16 @@ void dispatch_init(void) {  // (after gamelib_load)
     }
     tables[0] = (FnTable){moved[0], g->main_fns, nm, moved[0][0], moved[0][nm - 1]};
     tables[1] = (FnTable){moved[1], g->sdk_fns, ns, moved[1][0], moved[1][ns - 1]};
+    if (nu) tables[2] = (FnTable){moved[2], g->sub_fns, nu, moved[2][0], moved[2][nu - 1]};
 #else
     tables[0] = (FnTable){g->main_addrs, g->main_fns, nm, g->main_addrs[0], g->main_addrs[nm - 1]};
     tables[1] = (FnTable){g->sdk_addrs, g->sdk_fns, ns, g->sdk_addrs[0], g->sdk_addrs[ns - 1]};
+    if (nu) tables[2] = (FnTable){g->sub_addrs, g->sub_fns, nu, g->sub_addrs[0], g->sub_addrs[nu - 1]};
 #endif
 }
 
 GuestFn dispatch_lookup(uint64_t addr) {
-    for (int t = 0; t < 2; t++) {
+    for (int t = 0; t < ntables; t++) {
         FnTable *ft = &tables[t];
         if (addr < ft->lo || addr > ft->hi) continue;
         uint64_t lo = 0, hi = ft->count;

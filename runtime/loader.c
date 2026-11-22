@@ -174,11 +174,15 @@ static void relocate(Module *m) {
 
 void loader_load(const char *exefs) {
     char path[1024];
-    const struct { const char *name; uint64_t base; } mods[] = {{"main", MAIN_BASE}, {"sdk", SDK_BASE}};  // (rt.h: may move)
-    for (unsigned i = 0; i < 2; i++) {
+    const struct { const char *name; uint64_t base; } mods[] = {{"main", MAIN_BASE}, {"sdk", SDK_BASE},
+                                                              {"subsdk0", SUBSDK0_BASE}};  // (rt.h: may move)
+    for (unsigned i = 0; i < 3; i++) {
+        snprintf(path, sizeof path, "%s/%s", exefs, mods[i].name);
+        FILE *f = i == 2 ? fopen(path, "rb") : NULL;  // (subsdk0: Kirby's, Zelda has none)
+        if (i == 2 && !f) break;
+        if (f) fclose(f);
         Module *m = &g_modules[g_nmodules++];
         m->name = mods[i].name;
-        snprintf(path, sizeof path, "%s/%s", exefs, m->name);
         load_nso(m, path, mods[i].base);
     }
     for (int i = 0; i < g_nmodules; i++) relocate(&g_modules[i]);

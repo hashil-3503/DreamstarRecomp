@@ -216,6 +216,7 @@ static void load_hot(const char *path) {
         uint64_t base = 0;
         if (!strncmp(p, "main ", 5)) base = 0x7000000000ull, p += 5;
         else if (!strncmp(p, "sdk ", 4)) base = 0x7004000000ull, p += 4;
+        else if (!strncmp(p, "subsdk0 ", 8)) base = 0x7008000000ull, p += 8;
         char *end;
         uint64_t a = base + strtoull(p, &end, 16);
         if (end == p) continue;
@@ -505,7 +506,7 @@ static void *gen_thread(void *arg) {
     lasgen_defaults(&o);
     o.name = g->name;
     o.nso = g->nso;
-    o.base = strcmp(g->name, "sdk") ? 0x7000000000ull : 0x7004000000ull;
+    o.base = !strcmp(g->name, "sdk") ? 0x7004000000ull : !strcmp(g->name, "subsdk0") ? 0x7008000000ull : 0x7000000000ull;
     o.outdir = g->out;
     if (!strcmp(g->name, "sdk")) o.hle_text = k_hle_symbols;
     o.patch_variants_text = k_patch_variants;
@@ -698,9 +699,12 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     char work[1100], tmp[1100];
     snprintf(work, sizeof work, "%s" SEP ".gamebuild", game_dir);
     snprintf(tmp, sizeof tmp, "%s" SEP "%s.tmp", work, lib_name);
-    char input_paths[6][1100], spec[4096];
+    char input_paths[7][1100], spec[4096];
     snprintf(input_paths[0], sizeof input_paths[0], "%s" SEP "exefs" SEP "main", game_dir);
     snprintf(input_paths[1], sizeof input_paths[1], "%s" SEP "exefs" SEP "sdk", game_dir);
+    snprintf(input_paths[6], sizeof input_paths[6], "%s" SEP "exefs" SEP "subsdk0", game_dir);
+    struct stat sub_st;
+    const int ngen = stat(input_paths[6], &sub_st) == 0 ? 3 : 2;  // (subsdk0: Kirby's third module, Zelda has none)
     const char *headers[] = {"cpu.h", "simd.h", "simd_fp.h", "gamelib.h"};
     for (int i = 0; i < 4; ++i) snprintf(input_paths[i+2], sizeof input_paths[i+2], "%s" SEP "%s", t.inc, headers[i]);
     // Generator changes should rebuild only chunks whose C changed, as in the existing incremental builder.
@@ -724,8 +728,8 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         update = stat(rp, &st) == 0;
     }
     // (the generator itself and the data it embeds are part of lib_id: GAMELIB_SRCS in the Makefile)
-    const char *gen_inputs[2] = {input_paths[0], input_paths[1]};
-    if (!build_cache_prepare_generation(cache, lib_id, gen_inputs, 2, why, why_size)) {
+    const char *gen_inputs[3] = {input_paths[0], input_paths[1], input_paths[6]};
+    if (!build_cache_prepare_generation(cache, lib_id, gen_inputs, ngen, why, why_size)) {
         build_cache_failed(cache);
         build_cache_close(cache);
         return false;
@@ -770,9 +774,9 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     LOG("[gamebuild] generator built in, compiler %s%s, %d jobs\n", t.cc, t.zig ? " cc" : "", o->jobs);
 
     // 1. the generator, both modules at once (a thread each); their finished files are compiled while it goes on
-    Gen gens[2] = {{.name = "main"}, {.name = "sdk"}};
+    Gen gens[3] = {{.name = "main"}, {.name = "sdk"}, {.name = "subsdk0"}};
     bool ok = true;
-    for (int i = 0; i < 2 && ok; i++) {
+    for (int i = 0; i < ngen && ok; i++) {
         Gen *g = &gens[i];
         g->exit = -1;
         snprintf(g->log, sizeof g->log, "%s" SEP "gen_%s.log", work, g->name);
@@ -792,8 +796,8 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     }
 
     Units units = {0};
-    int queued[2] = {0, 0};  // chunk files of each module put in units so far
-    bool tables[2] = {false, false};
+    int queued[3] = {0, 0, 0};  // chunk files of each module put in units so far
+    bool tables[3] = {false, false, false};
     int next = 0, jobs = o->jobs < 1 ? 1 : o->jobs > 64 ? 64 : o->jobs;
     struct { PlatProc p; int unit; } run[64];
     int nrun = 0;
@@ -811,7 +815,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         bool gens_done = true;
         double gen_frac = 0;
         unsigned long long written = 0;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < ngen; i++) {
             Gen *g = &gens[i];
             int files = g->files;
             unsigned long long gci = g->ci, gn = g->n;
@@ -848,7 +852,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
                 add_unit(&units, src, work, stem);
                 tables[i] = true;
             }
-            gen_frac += g->exit == 0 ? 0.5 : gn ? 0.5 * (double)gci / (double)gn : 0;
+            gen_frac += (g->exit == 0 ? 1.0 : gn ? (double)gci / (double)gn : 0) / ngen;
         }
         if (!ok) break;
         for (int k = 0; k < units.n; k++) written += units.u[k].bytes;
@@ -902,7 +906,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
         sleep_ms(50);
     }
     for (int k = 0; k < nrun; k++) stop(run[k].p);  // (a failure: the rest is of no use - the failure shows at once)
-    for (int i = 0; i < 2; i++) gen_end(&gens[i]);
+    for (int i = 0; i < ngen; i++) gen_end(&gens[i]);
 
     // 2. link
     if (ok) {

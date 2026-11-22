@@ -16,6 +16,7 @@ static const GameAddrs ga_v1_0_1 = {
 #include "game_addresses/patches_v1_0_1.h"
 #include "game_addresses/runtime_v1_0_1.h"
 };
+static const GameAddrs ga_kirby_1_0_0;  // (all 0: no Zelda addresses)
 #undef GA_ADDR
 
 static const GameVersion versions[] = {
@@ -118,6 +119,7 @@ bool game_version_select(const char *game_dir, char *why, size_t why_size) {
 }
 
 const GameVersion *game_version(void) { return g_version; }
+bool game_is_kirby(void) { return g_version && !strncmp(g_version->key, "kirby", 5); }
 
 uint64_t game_romfs_bytes(const GameVersion *v) {
     if (!v) return 0;

@@ -45,6 +45,8 @@ endif
 # differs per arch (AArch64 hosts run the guest's FP/SIMD as inline asm, others use the portable C of simd.h), so a
 # cross build has its own generated-<arch>/ and build/<arch>/; SYSROOT is the target's root filesystem (headers, libs).
 GEN      ?= generated
+# the game files' exefs (make gen EXEFS=<folder>)
+EXEFS    ?= extracted/exefs
 ifeq ($(PLATFORM),linux)
 HOSTARCH := $(patsubst arm64,aarch64,$(shell uname -m))
 ARCH     ?= $(HOSTARCH)
@@ -76,7 +78,7 @@ GENFLAGS := $(GENFLAGS_BASE)
 # the app itself holds none of it
 # (strip: with no generated code the space between the two would be all that's left, and $(if) takes a lone space as
 # true. No comment after the value: make keeps the spaces before it)
-GEN_SRC  := $(strip $(wildcard $(GEN)/main/*.c) $(wildcard $(GEN)/sdk/*.c))
+GEN_SRC  := $(strip $(wildcard $(GEN)/main/*.c) $(wildcard $(GEN)/sdk/*.c) $(wildcard $(GEN)/subsdk0/*.c))
 # The game code generator (runtime/gen/): in the app (the start screen's setup runs it) and the lasgen tool (cli.cpp)
 LASGEN_SRC := $(filter-out runtime/gen/cli.cpp,$(wildcard runtime/gen/*.cpp))
 GEN_OBJ  := $(patsubst %.c,$(B)/obj/%.o,$(patsubst $(GEN)/%,%,$(GEN_SRC))) $(B)/obj/tools/gamelib_entry.o
@@ -338,8 +340,9 @@ $(B)/rt/zipfile.o: $(MINIZ)/.fetched
 $(B)/rt/zipfile.o: RTFLAGS += -I$(MINIZ)
 
 gen: $(LASGEN)
-	$(LASGEN) sdk extracted/exefs/sdk 0x7004000000 $(GEN)/sdk --hle runtime/hle/hle_symbols.txt $(GENSIMD)
-	$(LASGEN) main extracted/exefs/main 0x7000000000 $(GEN)/main $(GENSIMD)
+	$(LASGEN) sdk $(EXEFS)/sdk 0x7004000000 $(GEN)/sdk --hle runtime/hle/hle_symbols.txt $(GENSIMD)
+	$(LASGEN) main $(EXEFS)/main 0x7000000000 $(GEN)/main $(GENSIMD)
+	if [ -f $(EXEFS)/subsdk0 ]; then $(LASGEN) subsdk0 $(EXEFS)/subsdk0 0x7008000000 $(GEN)/subsdk0 $(GENSIMD); fi
 
 gen-objs: $(GEN_OBJ)
 

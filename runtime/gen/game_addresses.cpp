@@ -37,6 +37,8 @@ const AddressTable &address_table(const std::string &key) {
     static const AddressTable v1_0_0 = make_table(ga_v1_0_0), v1_0_1 = make_table(ga_v1_0_1);
     if (key == "v1_0_0") return v1_0_0;
     if (key == "v1_0_1") return v1_0_1;
+    static const AddressTable none;  // (Kirby: no patch sites)
+    if (key == "kirby_1_0_0") return none;
     throw GenError("Unknown game version " + key);
 }
 
