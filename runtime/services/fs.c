@@ -961,7 +961,7 @@ static void file(Service *s, IpcReq *req, IpcResp *resp) {
         plat_os_write(b->addr, (uint64_t)size);
         ssize_t n = pread(f->fd, (void *)(uintptr_t)b->addr, (size_t)size, off);
         if (n < 0) resp->result = errno_result();
-        if (n > 0 && !f->scratch && strstr(f->path, "savedata")) {
+        if (n > 0 && !f->scratch && strstr(f->path, "savedata") && !game_is_kirby()) {  // (Zelda save extras)
             LOG("[save] read %s off %lld size %lld -> guest %llx\n", f->path, (long long)off, (long long)size, (unsigned long long)b->addr);
             extern void save_editor_file_read(const char *path, uint64_t addr, int64_t off, int64_t size);
             save_editor_file_read(f->path, b->addr, off, n);
@@ -989,7 +989,7 @@ static void file(Service *s, IpcReq *req, IpcResp *resp) {
             if (n <= 0) { error = n ? errno : EIO; break; }
             done += n;
         }
-        if (!error && !f->scratch && strstr(f->path, "savedata")) {
+        if (!error && !f->scratch && strstr(f->path, "savedata") && !game_is_kirby()) {  // (Zelda save extras)
             extern bool flags_ext_save_written(const char *path, uint64_t addr, int64_t off, int64_t size);
             errno = 0;
             if (!flags_ext_save_written(f->path, a->addr, off, size)) error = errno ? errno : EIO;

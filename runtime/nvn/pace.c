@@ -155,6 +155,9 @@ bool pace_target_30(void) {
 
 static bool hold_30(bool on) {
     static bool held;
+#ifndef PACE_TEST
+    if (game_is_kirby()) return held = false;  // (Zelda's game manager and its 30 fps mode)
+#endif
     on = on || pace_target_30();  // (the FPS target: held whatever the pacer measures)
     static uint8_t saved;
 #ifdef PACE_TEST  // (tools/test_pace.c: a simulated game manager)

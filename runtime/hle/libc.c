@@ -35,3 +35,13 @@ void hle_strncmp(Cpu *c) {
     c->x[0] = (uint64_t)((int64_t)*a - (int64_t)*b);
 }
 void hle_memchr(Cpu *c) { c->x[0] = (uint64_t)(uintptr_t)memchr(P(0), (int)(uint8_t)c->x[1], c->x[2]); }
+
+// nn::diag::detail::VAbortImpl(condition, function, file, line, Result*, UserExceptionInfo*, format, va_list): where
+// every SDK assertion and abort ends. Its text names the failed check; the SDK's own only reaches svcBreak.
+void hle__ZN2nn4diag6detail10VAbortImplEPKcS3_S3_iPKNS_6ResultEPKNS_2os17UserExceptionInfoES3_St9__va_list(Cpu *c) {
+    const char *cond = c->x[0] ? (const char *)P(0) : "", *fn = c->x[1] ? (const char *)P(1) : "",
+               *file = c->x[2] ? (const char *)P(2) : "", *fmt = c->x[6] ? (const char *)P(6) : "";
+    uint32_t result = c->x[4] ? *(const uint32_t *)P(4) : 0;
+    FATAL("game abort: %s in %s (%s:%d), result %#x (module %u, description %u), message \"%s\" (lr %llx)\n", cond, fn,
+          file, (int)c->x[3], result, result & 0x1ff, (result >> 9) & 0x1fff, fmt, (unsigned long long)c->x[30]);
+}

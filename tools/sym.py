@@ -1,5 +1,6 @@
 """Symbolize guest addresses: sym.py <addr>... [--dis N]"""
 import bisect
+import os
 import struct
 import subprocess
 import sys
@@ -7,13 +8,14 @@ import sys
 import capstone
 from nso import Nso
 
-MODS = [('main', 0x7000000000), ('sdk', 0x7004000000)]
+MODS = [('main', 0x7000000000), ('sdk', 0x7004000000), ('subsdk0', 0x7008000000)]
+EXEFS = os.environ.get('LARECOMP_EXEFS', '../extracted/exefs')  # (the game files' exefs)
 _cache = {}
 
 
 def mod(name):
     if name not in _cache:
-        n = Nso(f'../extracted/exefs/{name}')
+        n = Nso(f'{EXEFS}/{name}')
         syms = sorted((s[3], s[0]) for s in n.syms if s[2] and (s[1] & 0xF) == 2)
         _cache[name] = (n, syms, [a for a, _ in syms])
     return _cache[name]

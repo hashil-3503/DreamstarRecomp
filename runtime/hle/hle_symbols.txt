@@ -8,3 +8,4 @@ strlen
 strcmp
 strncmp
 memchr
+_ZN2nn4diag6detail10VAbortImplEPKcS3_S3_iPKNS_6ResultEPKNS_2os17UserExceptionInfoES3_St9__va_list

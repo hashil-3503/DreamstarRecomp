@@ -258,6 +258,16 @@ void rt_fatal_trace(void) {
         for (int i = 0; i < 31; i += 4)
             fprintf(stderr, "  x%-2d %016llx  x%-2d %016llx  x%-2d %016llx  x%-2d %016llx\n", i, c->x[i], i + 1,
                     c->x[i + 1], i + 2, c->x[i + 2], i + 3, c->x[i + 3]);
+        // the guest's callers, by its frame records (x29 chain): map them with tools/sym.py
+        fprintf(stderr, "guest callers:");
+        uint64_t fp = c->x[29];
+        for (int n = 0; n < 24 && fp >= GUEST_LO && fp + 16 <= GUEST_HI && !(fp & 7); n++) {
+            uint64_t ret = *(uint64_t *)(uintptr_t)(fp + 8), next = *(uint64_t *)(uintptr_t)fp;
+            fprintf(stderr, " %llx", (unsigned long long)ret);
+            if (next <= fp) break;
+            fp = next;
+        }
+        fprintf(stderr, "\n");
     }
     plat_fatal_notice();
     // our crash handler also catches SIGABRT: without this abort() re-entered it forever (a 5 GB log)

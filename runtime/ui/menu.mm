@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "../game_addresses.h"
 #include "imgui.h"
 #include "i18n.h"
 #include "live_preview.h"
@@ -2071,14 +2072,15 @@ void menu_render(void *cmd, uint32_t target_w, uint32_t target_h) {
 #endif
     notice_take();  // (a save failed: the menu opens with it)
     bool open = g_open.load();
-    bool inv = !open && inventory_overlay_wanted();
-    bool trk = !open && tracker_overlay_wanted();
-    bool trkd = !open && tracker_dungeon_wanted();
-    bool chaos = !open && chaos_overlay_wanted();
+    bool zelda = !game_is_kirby();  // (the overlays below read Zelda's game state)
+    bool inv = zelda && !open && inventory_overlay_wanted();
+    bool trk = zelda && !open && tracker_overlay_wanted();
+    bool trkd = zelda && !open && tracker_dungeon_wanted();
+    bool chaos = zelda && !open && chaos_overlay_wanted();
     bool kbd = g_kbd.load() == 1;
-    bool race = race_overlay_wanted();  // (run timer, race seed hash: race_overlay.mm)
-    bool flyin = pickup_flyin_wanted() && !open;  // (a silent pickup's card)
-    bool dpad = !open && dpad_overlay_wanted();
+    bool race = zelda && race_overlay_wanted();  // (run timer, race seed hash: race_overlay.mm)
+    bool flyin = zelda && pickup_flyin_wanted() && !open;  // (a silent pickup's card)
+    bool dpad = zelda && !open && dpad_overlay_wanted();
 #ifdef __APPLE__
     plastic_perf_note(cb, open);  // (LARECOMP_UI_PERF test only)
 #else

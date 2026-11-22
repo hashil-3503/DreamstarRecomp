@@ -1988,14 +1988,16 @@ static void present_hooks(void) {
     if (slow_ms > 0 && total_frames > 2600 && (!slow_until || (long)total_frames < slow_until)) SDL_Delay((Uint32)slow_ms);
     extern void fnprof_frame(uint64_t frame);
     fnprof_frame(total_frames);
+    extern bool game_is_kirby(void);
+    bool zelda = !game_is_kirby();  // (warps, the save editor and cheats, level changes: Zelda's game state)
     extern void warp_frame(uint64_t frame);
-    warp_frame(total_frames);
+    if (zelda) warp_frame(total_frames);
     extern void reboot_test_frame(uint64_t frame);  // runtime/main.c (LARECOMP_REBOOT_AT)
     reboot_test_frame(total_frames);
     extern void save_editor_frame(uint64_t frame);
-    save_editor_frame(total_frames);
+    if (zelda) save_editor_frame(total_frames);
     extern void vk_level_change_check(void);
-    vk_level_change_check();
+    if (zelda) vk_level_change_check();
     static long debug_at = -1;
     if (debug_at < 0) { const char *e = getenv("LARECOMP_DEBUG_FRAME"); debug_at = e ? atol(e) : 0; }
     extern volatile int g_debug_frame_request;
