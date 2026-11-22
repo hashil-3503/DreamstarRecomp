@@ -849,6 +849,8 @@ static void fill_state(Cpu *c) {
     static int nlog;
     if (nlog < 6 && (sampling % 600) == 1) { nlog++; LOG("[input] GetNpadState id %#x lr %llx\n", id, c->x[30]); }
     if (id != 0) return;  // docked: only player 1 (FullKey); Handheld stays disconnected
+    extern bool game_is_kirby(void);
+    if (!game_is_kirby()) {  // (Zelda features, at Zelda addresses)
     extern void warp_game_tick(Cpu *c);
     warp_game_tick(c);  // game main thread, once per frame: apply a queued warp
     { extern void give_item_tick(Cpu *c, uint64_t frame); extern uint64_t renderer_present_count(void);
@@ -869,6 +871,7 @@ static void fill_state(Cpu *c) {
       run_timer_tick();  // (run timer / LiveSplit: runtime/hle/run_timer.c)
       extern void pets_game_tick(Cpu *c);
       pets_game_tick(c); }
+    }
     extern uint64_t g_watch_lo, g_watch_hi;
     if (id == 0 && !g_pad_obj) g_pad_obj = c->x[1] - 8;
     if (id == 0 && !g_watch_lo && getenv("LARECOMP_WATCH_PAD")) {
@@ -905,6 +908,7 @@ static void fill_state(Cpu *c) {
     touch_stick(&tlx, &tly);
     int32_t lx = clamp_axis((menu ? 0 : key_lx + pad_lx + tlx) + script_lx), ly = clamp_axis((menu ? 0 : key_ly + pad_ly + tly) + script_ly);
     int32_t rx = clamp_axis((menu ? 0 : key_rx + pad_rx) + script_rx), ry = clamp_axis((menu ? 0 : key_ry + pad_ry) + script_ry);
+    if (game_is_kirby()) goto write;  // (the d-pad items, mirror mode, door jumps, companions: Zelda's)
     if (!menu) {  // d-pad items (setting): the Items page assigns, play uses (runtime/hle/dpad_items.c; before mirroring:
         extern uint64_t dpad_items_input(uint64_t b);  // the d-pad as held)
         b = dpad_items_input(b);
@@ -955,6 +959,7 @@ static void fill_state(Cpu *c) {
         b = tracker_map_input(b, st);
         lx = st[0], ly = st[1], rx = st[2], ry = st[3];
     }
+write:
     *(uint64_t *)(s + 8) = b;
     static uint64_t last_b;
     if (b != last_b && getenv("LARECOMP_INPUT")) LOG("[input] id %#x buttons %#llx (sampling %lld, lr %llx)\n", id, (unsigned long long)b, (long long)sampling, c->x[30]);

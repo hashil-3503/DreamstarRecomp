@@ -350,6 +350,9 @@ void rt_fault_report(const char *what, uint64_t fa, uint64_t pc, uint64_t lr) {
     fprintf(stderr, "\n*** %s accessing %#llx\n    host pc %llx (%s+%llx)\n    host lr %llx (%s)\n", what,
             (unsigned long long)fa, (unsigned long long)pc, ps ? ps : "?", (unsigned long long)po,
             (unsigned long long)lr, ls ? ls : "?");
+    if (!ps)  // (no symbol table here: the place relative to a known function, for gdb's `info line *(rt_fault_report+N)`)
+        fprintf(stderr, "    host pc = rt_fault_report%+lld, lr = rt_fault_report%+lld\n",
+                (long long)(pc - (uint64_t)(uintptr_t)rt_fault_report), (long long)(lr - (uint64_t)(uintptr_t)rt_fault_report));
     rt_fatal_trace();
 }
 
