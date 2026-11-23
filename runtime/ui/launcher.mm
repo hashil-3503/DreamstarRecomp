@@ -2422,6 +2422,70 @@ extern "C" int launcher_prepare_cli(const char *root, const char *src) {
     return 0;
 }
 
+// ------------------------------------------------------------------ Kirby: its own start screen
+// The title, the game folder (exefs + romfs, read where it is: nothing is copied) and PLAY. The Zelda setup, seeds and
+// settings aren't for it; the in-game menu (F1) has the settings.
+static std::string g_kirby_pick;  // a folder picked in the dialog, applied on the main thread
+static bool kirby_files(const std::string &root) {
+    const GameVersion *v = game_version_of(root.c_str());
+    return v && !strncmp(v->key, "kirby", 5);
+}
+static std::string kirby_status(const std::string &root) {
+    if (!kirby_files(root)) return "No Kirby Star Allies game files in this folder.";
+    if (!file_exists(root + "/romfs")) return "The romfs folder is missing.";
+    if (!gamelib_present(root.c_str())) return "The game code isn't built for these files.";
+    return "";
+}
+static void SDLCALL kirby_picked(void *, const char *const *files, int) {
+    if (!files || !files[0]) return;
+    pthread_mutex_lock(&g_lock);
+    g_kirby_pick = files[0];
+    pthread_mutex_unlock(&g_lock);
+}
+extern "C" const char *launcher_root(void) { return g_root.c_str(); }  // (the folder PLAY boots: runtime/main.c)
+static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play) {
+    ImDrawList *bg = ImGui::GetBackgroundDrawList();
+    bg->AddRectFilledMultiColor(ImVec2(0, 0), ds, IM_COL32(255, 150, 190, 255), IM_COL32(255, 196, 120, 255),
+                                IM_COL32(120, 170, 255, 255), IM_COL32(190, 120, 230, 255));
+    bg->AddRectFilled(ImVec2(0, 0), ds, IM_COL32(20, 10, 40, 90));
+    float x0 = 90 * s;
+    ImGui::PushFont(g_font_title);
+    ImGui::SetCursorPos(ImVec2(x0, 110 * s));
+    const char *t = "Kirby Star Allies";
+    text_fx(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), ImGui::GetCursorScreenPos(),
+            IM_COL32(255, 245, 250, 255), IM_COL32(255, 170, 210, 255), t, 3 * s);
+    ImGui::Dummy(ImGui::CalcTextSize(t));
+    ImGui::PopFont();
+
+    ImGui::PushFont(g_font_small);
+    ImGui::SetCursorPos(ImVec2(x0, 300 * s));
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "Game folder");
+    ImGui::SetCursorPosX(x0);
+    ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", g_root.c_str());
+    ImGui::SetCursorPosX(x0);
+    if (ImGui::Button("Change...")) SDL_ShowOpenFolderDialog(kirby_picked, NULL, g_launcher_win, NULL, false);
+    if (!status.empty()) {
+        ImGui::SetCursorPosX(x0);
+        ImGui::TextColored(ImVec4(1, 0.85f, 0.5f, 1), "!  %s", status.c_str());
+    }
+    ImGui::PopFont();
+
+    ImGui::PushFont(g_font_menu);
+    ImGui::SetCursorPos(ImVec2(x0, ds.y - 230 * s));
+    static bool focused;
+    if (!focused && status.empty()) { ImGui::SetKeyboardFocusHere(); focused = true; }
+    ImGui::BeginDisabled(!status.empty());
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.93f, 0.25f, 0.5f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0.4f, 0.62f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.18f, 0.42f, 1));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 40 * s);
+    if (ImGui::Button("Play", ImVec2(360 * s, 110 * s))) play = true;
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor(3);
+    ImGui::EndDisabled();
+    ImGui::PopFont();
+}
+
 extern "C" void launcher_run(const char *root) {
     g_root = root;
     g_start_screen = 1;
@@ -2493,8 +2557,11 @@ extern "C" void launcher_run(const char *root) {
     if (check_copied_files(g_root).empty() && file_exists(g_root + "/romfs.bin") &&
         rt_remove_game_file(g_root.c_str(), "romfs.bin"))
         fprintf(stderr, "[launcher] removed the old game data image (romfs.bin)\n");
-    std::string status = check_game_files(g_root);
-    if (check_copied_files(g_root).empty()) load_background(dev);  // (also behind an update of the game code)
+    // Kirby: not a Zelda setup in the data root - its own screen (the folder picked before, or the one given)
+    const bool kirby = !check_copied_files(g_root).empty();
+    if (kirby && g_settings.game_dir[0] && !kirby_files(g_root)) g_root = g_settings.game_dir;
+    std::string status = kirby ? kirby_status(g_root) : check_game_files(g_root);
+    if (!kirby && check_copied_files(g_root).empty()) load_background(dev);  // (also behind an update of the game code)
     // the RANDOMIZER row's choices: 0 New Seed, then the seeds (starting on the last one played)
     std::vector<std::string> seeds = list_seeds();
     int choice = 0;
@@ -2507,7 +2574,7 @@ extern "C" void launcher_run(const char *root) {
     // what the game starts with ("" vanilla): PLAY's, or the row's seed; until one is pressed, the seed of the last
     // start (the test hooks that press PLAY themselves keep booting what they did)
     std::string start_seed = g_settings.rando_seed;
-    Page page = status.empty() ? MAIN : SETUP;
+    Page page = status.empty() || kirby ? MAIN : SETUP;
     bool play = false;
     // LARECOMP_LAUNCHER_SHOT=<frame>[:<page>] (test): save build/launcher.png at that frame and exit; page:
     // settings[:<tab>] / rando / askdelete / setup / extracting / preparing / skipask / recompiling / tip / aspect / notice
@@ -2681,6 +2748,18 @@ extern "C" void launcher_run(const char *root) {
             fprintf(stderr, "[launcher] shader preparation %s: playing\n", g_prep_skip ? "skipped" : "done");
         }
         if (play) break;
+        if (kirby) {
+            pthread_mutex_lock(&g_lock);
+            std::string pick;
+            pick.swap(g_kirby_pick);
+            pthread_mutex_unlock(&g_lock);
+            if (!pick.empty()) {
+                g_root = pick;
+                status = kirby_status(g_root);
+                snprintf(g_settings.game_dir, sizeof g_settings.game_dir, "%s", g_root.c_str());
+                settings_save();
+            }
+        }
         menu_apply_window_requests(win);  // (the Video tab's Fullscreen)
         // no seed on the start screen: PLAY is the vanilla game (Settings > Gameplay greys out only what a seed forces)
         g_settings.rando_seed[0] = 0;
@@ -2903,7 +2982,7 @@ extern "C" void launcher_run(const char *root) {
             float x0 = fmaxf(90 * s, safe_l + 30 * s);
             ImGui::SetCursorPos(ImVec2(x0, 120 * s));
             ImGui::PushFont(g_font_title);
-            if (page == MAIN) {  // gold to orange, shadowed (not behind the Settings / System windows)
+            if (page == MAIN && !kirby) {  // gold to orange, shadowed (not behind the Settings / System windows)
                 const char *t = "LAS Recompiled";
                 ImVec2 p = ImGui::GetCursorScreenPos();
                 text_fx(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), p, IM_COL32(255, 232, 120, 255),
@@ -2916,6 +2995,8 @@ extern "C" void launcher_run(const char *root) {
             // before too, so the Esc that ends the typing doesn't also leave the page)
             static bool typed_before;
             bool typing = typed_before || ui_text_busy();
+            if (kirby) kirby_page(s, ds, status, play);
+            else {
 
             if (page == MAIN) {
                 {  // the items close together, the block anchored where QUIT always was (the gap to the status line
@@ -3456,6 +3537,7 @@ extern "C" void launcher_run(const char *root) {
             }
             ImGui::PopFont();
             }
+            }  // (!kirby)
             ImGui::EndDisabled();
             {   // (another data folder picked: move / start fresh, then restart; in the menus' look from every page -
                 // Settings, the System window at the first setup)

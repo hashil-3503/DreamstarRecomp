@@ -217,6 +217,10 @@ static bool settings_apply(const char *key, const char *val) {
         strlcpy(g_settings.rando_seed, val, sizeof g_settings.rando_seed);
         return true;
     }
+    if (!strcmp(key, "game_dir")) {
+        strlcpy(g_settings.game_dir, val, sizeof g_settings.game_dir);
+        return true;
+    }
     if (!strcmp(key, "rando_last")) {
         strlcpy(g_settings.rando_last, val, sizeof g_settings.rando_last);
         return true;
@@ -671,6 +675,7 @@ static void write_settings(FILE *f) {
     if (g_settings.cosmetics_seed[0]) fprintf(f, "cosmetics_seed = %s\n", g_settings.cosmetics_seed);
     bind_settings_save(f);
     fprintf(f, "rando_seed = %s\n", g_settings.rando_seed);
+    if (g_settings.game_dir[0]) fprintf(f, "game_dir = %s\n", g_settings.game_dir);
     if (g_settings.rando_last[0]) fprintf(f, "rando_last = %s\n", g_settings.rando_last);
     if (g_settings.rando_options[0]) fprintf(f, "rando_options = %s\n", g_settings.rando_options);
     for (int i = 0; i < RANDO_PRESETS_MAX; i++)

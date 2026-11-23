@@ -568,6 +568,8 @@ int main(int argc, char **argv) {
         if (title) {  // start screen (runtime/ui/launcher.mm): game files setup, seed choice, settings
             extern void launcher_run(const char *root);
             launcher_run(root);
+            extern const char *launcher_root(void);
+            root = launcher_root();  // (Kirby: the game folder picked there)
         }
         boot(root);
         update_reached_start_screen();  // (--play skips the start screen: the game booting counts the same)
