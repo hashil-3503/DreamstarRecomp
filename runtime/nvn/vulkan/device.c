@@ -1267,8 +1267,12 @@ static void create_swapchain(void) {
                 (fmts[i].colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT || getenv("LARECOMP_HDR_ANY_SPACE")))  // (test: the
                 // conversion on a display with HDR off - shown as SDR, so too bright and washed out)
                 sf = fmts[i], hdr = true;
-        static bool said;
-        if (!said) said = true, LOG("[vk] HDR: %s\n", hdr ? "HDR10 swapchain" : "no HDR10 format on this display (HDR off in the system?): SDR");
+        static int said = -1;  // (logged at each change: a window moved to another display)
+        if (said != hdr) {
+            said = hdr;
+            LOG("[vk] HDR: %s\n", hdr ? "HDR10 swapchain" : "no HDR10 format on this display (HDR off in the system?): SDR");
+            if (!hdr) for (uint32_t i = 0; i < nf; i++) LOG("[vk]   surface format %d, colour space %d\n", fmts[i].format, fmts[i].colorSpace);
+        }
     }
     uint32_t count = caps.minImageCount + 1;
     if (caps.maxImageCount && count > caps.maxImageCount) count = caps.maxImageCount;
@@ -1425,6 +1429,14 @@ bool vk_frame_begin(const float clear[4]) {
     if (rec_present_recreate()) recreate_swapchain();
     if (!g_vk.swapchain || (uint32_t)w != g_vk.sc_extent.width || (uint32_t)h != g_vk.sc_extent.height ||
         sc_mode_changed() || hdr_wanted() != hdr_asked) recreate_swapchain();
+    {   // HDR: the window moved to another display - one with HDR on, or off - takes that display's formats
+        static SDL_DisplayID disp;
+        SDL_DisplayID d = SDL_GetDisplayForWindow(window);
+        if (d != disp) {
+            if (disp && hdr_asked) recreate_swapchain();
+            disp = d;
+        }
+    }
     if (!g_vk.swapchain) return false;
     static int trace = -1;
     if (trace < 0) trace = getenv("LARECOMP_VK_TRACE") != NULL;
