@@ -432,6 +432,12 @@ static void effect_update(Effect *fx, const uint8_t *e) {
     fx->enabled = e[2];
     memcpy(&fx->mix_id, e + 4, 4);
     memcpy(&fx->order, e + 0x18, 4);
+    if (fx->type == 5) {  // I3DL2 reverb (Kirby): not rendered, passed through dry (same channel header as type 4)
+        memcpy(&fx->rv.p, e + 0x20, 16);
+        uint16_t ch = fx->rv.p.ch;
+        fx->rv.ready = ch == 1 || ch == 2 || ch == 4 || ch == 6;
+        return;
+    }
     if (fx->type != 4) return;
     const uint8_t *d = e + 0x20;
     uint16_t ch_max, ch;
@@ -460,7 +466,7 @@ static void apply_effects(Renderer *r, int32_t mix_id, Mix *m) {
     for (uint32_t order = 0; order < r->effects; order++) {
         for (uint32_t i = 0; i < r->effects; i++) {
             Effect *fx = &r->fx[i];
-            if (fx->type != 4 || fx->mix_id != mix_id || fx->order != order || !fx->rv.ready) continue;
+            if ((fx->type != 4 && fx->type != 5) || fx->mix_id != mix_id || fx->order != order || !fx->rv.ready) continue;
             int ch = fx->rv.p.ch;
             float *in[6], *out[6];
             int ok = 1;
@@ -475,7 +481,7 @@ static void apply_effects(Renderer *r, int32_t mix_id, Mix *m) {
             static int toggle = -1;
             if (toggle < 0) toggle = getenv("LARECOMP_REVERB_TOGGLE") ? atoi(getenv("LARECOMP_REVERB_TOGGLE")) : 0;
             int off = no_reverb || !g_settings.reverb || (toggle && (r->elapsed_frames / toggle) % 2);
-            if (fx->enabled && !off) reverb_process(&fx->rv, in, out, N);
+            if (fx->type == 4 && fx->enabled && !off) reverb_process(&fx->rv, in, out, N);
             else
                 for (int c = 0; c < ch; c++) if (in[c] != out[c]) memcpy(out[c], in[c], N * sizeof(float));
         }
@@ -902,7 +908,7 @@ static void request_update(Renderer *r, IpcReq *req, IpcResp *resp) {
         static uint32_t seen_types;
         if (e[0] && e[0] < 32 && !(seen_types & (1u << e[0]))) {
             seen_types |= 1u << e[0];
-            LOG("[audren] effect type %u used%s: slot %u mix %d enabled %u\n", e[0], e[0] == 4 ? "" : " (not implemented)", i,
+            LOG("[audren] effect type %u used%s: slot %u mix %d enabled %u\n", e[0], e[0] == 4 ? "" : e[0] == 5 ? " (I3DL2: passed through dry)" : " (not implemented)", i,
                 *(const int32_t *)(e + 4), e[2]);
         }
         if (e[0] && getenv("LARECOMP_AUDIO_LOG")) {
