@@ -1161,6 +1161,7 @@ void output_scale_log(unsigned long long frame, double dw, double dh, const OutS
 // The render height for a mode, in units of the Switch's 1080 lines (Match display for Dynamic: its own steps come on top)
 static double mode_height(int mode, double dw, double dh, bool reshape, double fit) {
     if (mode >= 1 && mode <= 8) return mode == 1 && g_gpu_integrated ? 720 / 1080.0 : mode;
+    if (mode == RES_1440) return 1440 / 1080.0;
     double h = reshape ? dh / 1080.0 : fit;  // Match display
     if (mode == RES_Q75) h *= 0.75;
     else if (mode == RES_Q25) h *= 0.25;

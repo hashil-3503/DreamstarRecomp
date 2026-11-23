@@ -5,7 +5,8 @@
 
 enum { ASPECT_UNLOCKED = 0, ASPECT_ORIGINAL = 1 };
 enum { HUD_CENTERED = 0, HUD_EDGES = 1 };
-enum { RES_MATCH = 0, /* 1..8 = 1x..8x */ RES_DYNAMIC = 9 /* output_scale.c's mode while dyn_res is on */, RES_Q75 = 10, RES_Q25 = 11, RES_Q50 = 12 };
+enum { RES_MATCH = 0, /* 1..8 = 1x..8x */ RES_DYNAMIC = 9 /* output_scale.c's mode while dyn_res is on */, RES_Q75 = 10, RES_Q25 = 11, RES_Q50 = 12,
+       RES_1440 = 13 /* 1440 lines: between 1x and 2x */ };
 // (11 was 67% of the display: larecomp.ini "67%" now loads as RES_Q75)
 enum { UPSCALE_BILINEAR = 0, UPSCALE_METALFX = 1 /* macOS */, UPSCALE_FSR1 = 2 /* Windows: AMD FSR 1 */ };
 #ifdef __APPLE__

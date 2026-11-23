@@ -745,8 +745,8 @@ static void tab_display(void) {
     // display order -> RES_* (the ini / enum order predates the menu order)
     // (up to 4x: 7680 x 4320, 8K - more only ran out of GPU memory, and sat next to 75% in the list)
     // (Match display in the middle: left from it 75% / 50% / 25%, right 1x-4x; user 2026-10-11)
-    static const char *res[] = {LN("25%"), LN("50%"), LN("75%"), LN("Match display"), LN("1x"), LN("2x"), LN("3x"), LN("4x")};
-    static const int res_mode[] = {RES_Q25, RES_Q50, RES_Q75, RES_MATCH, 1, 2, 3, 4};
+    static const char *res[] = {LN("25%"), LN("50%"), LN("75%"), LN("Match display"), LN("1x"), LN("1440p"), LN("2x"), LN("3x"), LN("4x")};
+    static const int res_mode[] = {RES_Q25, RES_Q50, RES_Q75, RES_MATCH, 1, RES_1440, 2, 3, 4};
     enum { RES_MATCH_AT = 3 };
     enum { NRES = sizeof res_mode / sizeof res_mode[0] };
     {
@@ -817,7 +817,7 @@ static void tab_display(void) {
     opt_child_end();
     // the upscaler, above Anti-aliasing (user 2026-11-12): does something only while the game renders below the window - a share of it (25-75%), 1x-4x short
     // of the window's height (1x is 720 lines on an integrated GPU), or Dynamic
-    int rm = g_settings.res_mode, lines = rm >= 1 && rm <= 8 ? (rm == 1 && g_gpu_integrated ? 720 : 1080 * rm) : 0;
+    int rm = g_settings.res_mode, lines = rm >= 1 && rm <= 8 ? (rm == 1 && g_gpu_integrated ? 720 : 1080 * rm) : rm == RES_1440 ? 1440 : 0;
     int win_h = g_win_px_h > 1 ? g_win_px_h : (int)ImGui::GetIO().DisplaySize.y;
     bool below = rm == RES_Q25 || rm == RES_Q50 || rm == RES_Q75 || (lines > 0 && lines < win_h);
     bool scaled = dyn || below;  // (no line to Resolution: Dynamic turns it on too - user 2026-11-12)

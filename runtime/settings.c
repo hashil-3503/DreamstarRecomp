@@ -186,6 +186,7 @@ bool g_gpu_integrated;
 static const char *res_name(int m) {
     static char n[8];
     if (m >= 1 && m <= 8) { snprintf(n, sizeof n, "%dx", m); return n; }
+    if (m == RES_1440) return "1440p";
     return m == RES_Q75 ? "75%" : m == RES_Q50 ? "50%" : m == RES_Q25 ? "25%" : "match";
 }
 
@@ -254,7 +255,7 @@ static bool settings_apply(const char *key, const char *val) {
         // ("dynamic": older files, when Dynamic was one of these - its toggle now, over Match display)
         if (!strcmp(val, "dynamic")) { g_settings.dyn_res = true, g_settings.res_mode = RES_MATCH; return true; }
         g_settings.res_mode = (!strcmp(val, "75%") || !strcmp(val, "67%")) ? RES_Q75 :
-                              !strcmp(val, "50%") ? RES_Q50 : !strcmp(val, "25%") ? RES_Q25 :
+                              !strcmp(val, "50%") ? RES_Q50 : !strcmp(val, "1440p") ? RES_1440 : !strcmp(val, "25%") ? RES_Q25 :
                               (n >= 1 && n <= 4) ? n : n > 4 ? 4 : RES_MATCH;  // (5x-8x were removed)
     }
     else if (!strcmp(key, "upscaler")) {  // (metalfx / fsr1: this OS's; auto: never chosen, the GPU's default)
