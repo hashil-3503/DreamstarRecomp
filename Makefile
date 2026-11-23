@@ -126,7 +126,7 @@ DEPINC   := -I$(DEPS)/include
 # SDL3 static: the frameworks it uses; FFmpeg static (the LGPL subset). The game code is its own dylib, as on
 # macOS, embedded as Frameworks/LASGame.framework by tools/bundle_ios.sh (the app itself holds none of it);
 # -export_dynamic keeps the runtime functions it calls visible to dyld.
-LDFLAGS  := -L$(DEPS)/lib -lSDL3 -lavformat -lavcodec -lavutil -lswscale -lbz2 -lz -liconv \
+LDFLAGS  := -L$(DEPS)/lib -lSDL3 -lavformat -lavfilter -lavcodec -lavutil -lswscale -lbz2 -lz -liconv \
             -Wl,-export_dynamic -Wl,-rpath,@executable_path/Frameworks \
             -framework Foundation -framework UIKit -framework Metal $(if $(IOS_SIM),,-framework MetalFX) -framework QuartzCore \
             -framework CoreGraphics -framework ImageIO -framework UniformTypeIdentifiers -framework CoreMedia \
@@ -155,7 +155,7 @@ SHADERC  ?= $(shell pkg-config --libs shaderc 2>/dev/null || echo -lshaderc)
 # -rdynamic: crash backtraces name host functions (runtime/platform/linux.c). DEPS: an rpath to its lib/ too, so the
 # game finds those libraries when run (the AppImage's own is set by tools/linux/package.sh)
 LDFLAGS  := -fuse-ld=lld -rdynamic $(if $(DEPS),-L$(DEPS)/lib -Wl$(comma)-rpath$(comma)$(abspath $(DEPS))/lib) \
-            -lSDL3 -lavformat -lavcodec -lavutil -lswscale -lvulkan $(SHADERC) -lpthread -ldl -lm
+            -lSDL3 -lavformat -lavfilter -lavcodec -lavutil -lswscale -lvulkan $(SHADERC) -lpthread -ldl -lm
 BACKEND_SRC := $(wildcard runtime/nvn/vulkan/*.c) $(wildcard runtime/nvn/vulkan/*.cpp)
 BACKEND_OBJ := $(patsubst runtime/%.cpp,$(B)/rt/%.o,$(patsubst runtime/%.c,$(B)/rt/%.o,$(BACKEND_SRC)))
 IMGUI_OBJ += $(B)/imgui/imgui_impl_vulkan.o
@@ -176,7 +176,7 @@ else
 GENARCH  ?= -march=x86-64-v3  # AVX2 + FMA for the lifted FP/SIMD code (simd.h); override for older CPUs
 endif
 GENFLAGS += -D_FILE_OFFSET_BITS=64 $(GENARCH)
-LDFLAGS  := -fuse-ld=lld -Wl,--stack,16777216 $(if $(DEPS),-L$(DEPS)/lib) -lSDL3 -lavformat -lavcodec -lavutil -lswscale \
+LDFLAGS  := -fuse-ld=lld -Wl,--stack,16777216 $(if $(DEPS),-L$(DEPS)/lib) -lSDL3 -lavformat -lavfilter -lavcodec -lavutil -lswscale \
             -lvulkan-1 -lws2_32 -lwinmm -lole32 -lshell32 -lcomdlg32 -luuid -lshaderc_shared \
             $(if $(RELEASE),-Wl$(comma)--subsystem$(comma)windows -Wl$(comma)--strip-debug)  # release: no console window (log -> lasrecomp.log + lasrecomp-backup-*.log), no debug info
 ifeq ($(WINARCH),aarch64)

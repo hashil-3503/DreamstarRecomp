@@ -234,8 +234,10 @@ static void ex_set_data_source(Cpu *c) {
     char host[1024];
     snprintf(host, sizeof host, "%s/%s", g_romfs_dir, rel ? rel : "");
     if (game_is_kirby() && rel) {
+        extern void movie60_start(const char *romfs_dir);  // (the copies below, made in the background: movie60.c)
+        movie60_start(g_romfs_dir);
         // Kirby's movies are 30 fps: a 60 fps copy made from the player's own file (motion-interpolated -
-        // tools/kirby_movies60.sh) in <data>/cache/movie60/ is played instead when there is one. Without it, the
+        // runtime/hle/movie60.c, in the background on the first launch) in <data>/cache/movie60/ is played instead when there is one. Without it, the
         // blended in-betweens (queue_video_frame). LARECOMP_MOVIE60=0: the original.
         extern const char *rt_data_root(void);
         const char *base = strrchr(rel, '/') ? strrchr(rel, '/') + 1 : rel, *e = getenv("LARECOMP_MOVIE60");

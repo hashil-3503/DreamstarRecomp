@@ -28,13 +28,13 @@ if [ ! -f "$P/lib/libavcodec.dll.a" ]; then
     unpack ffmpeg-9.0.2.tar.xz ffmpeg
     (cd "$S/ffmpeg" && ./configure --prefix="$NEUTRAL" --cc=clang --cxx=clang++ --arch="${MSYSTEM_CARCH:-x86_64}" --target-os=mingw32 \
         --enable-shared --disable-static \
-        --disable-autodetect --disable-programs --disable-doc --disable-network --disable-avdevice --disable-avfilter \
+        --disable-autodetect --disable-programs --disable-doc --disable-network --disable-avdevice \
         --disable-swresample --disable-everything \
         --enable-protocol=file --enable-demuxer=matroska,mov \
-        --enable-decoder=vp9,vp8,vorbis,opus,h264,aac --enable-parser=vp9,vp8,vorbis,opus,h264,aac \
+        --enable-decoder=vp9,vp8,vorbis,opus,h264,aac,mpeg4 --enable-parser=vp9,vp8,vorbis,opus,h264,aac         --enable-filter=minterpolate,format,buffer,buffersink --enable-mediafoundation         --enable-encoder=h264_mf,mpeg4 --enable-muxer=mp4 \
         && make -j"$JOBS" && rm -rf "$S/ffmpeg-root" && make install DESTDIR="$S/ffmpeg-root")
     cp -R "$S/ffmpeg-root$NEUTRAL"/. "$P"/
-    sed -i "s|$NEUTRAL|$P|g" "$P"/lib/pkgconfig/lib{avformat,avcodec,avutil,swscale}.pc  # (pkg-config: the real place)
+    sed -i "s|$NEUTRAL|$P|g" "$P"/lib/pkgconfig/lib{avformat,avfilter,avcodec,avutil,swscale}.pc  # (pkg-config: the real place)
 fi
 if [ "${CI:-}" != true ]; then  # (no path of this machine inside: FFmpeg's configure line; not on CI: no one's paths)
     for f in "$P"/bin/*.dll; do
