@@ -297,6 +297,26 @@ static const char *builtin_src(const char *name, int *stage) {
                "  o = vec4(c, 1.0);\n"
                "}\n";
     }
+    // HDR output (device.c hdr_*): the window's SDR image (sRGB) into HDR10. pf.x: its white in nits, pf.y: the
+    // brightest parts' (above ~60% luminance, expanded smoothly towards it). BT.709 -> BT.2020, then the PQ curve.
+    if (!strcmp(name, "hdr.frag")) {
+        *stage = STAGE_FRAGMENT;
+        return "#version 450\n"
+               "layout(set = 0, binding = 0) uniform sampler2D t;\n"
+               "layout(push_constant) uniform F { layout(offset = 32) vec4 pf; };\n"
+               "layout(location = 0) in vec2 uv;\n"
+               "layout(location = 0) out vec4 o;\n"
+               "void main() {\n"
+               "  vec3 s = texture(t, uv).rgb;\n"
+               "  vec3 c = mix(s / 12.92, pow((s + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), s));\n"
+               "  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
+               "  float e = pow(clamp((y - 0.6) / 0.4, 0.0, 1.0), 3.0);\n"
+               "  c *= pf.x * mix(1.0, pf.y / pf.x, e);\n"
+               "  c = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956) * c;\n"
+               "  vec3 p = pow(clamp(c / 10000.0, 0.0, 1.0), vec3(0.1593017578125));\n"
+               "  o = vec4(pow((0.8359375 + 18.8515625 * p) / (1.0 + 18.6875 * p), vec3(78.84375)), 1.0);\n"
+               "}\n";
+    }
     if (!strcmp(name, "present.frag")) {
         *stage = STAGE_FRAGMENT;
         return "#version 450\n"

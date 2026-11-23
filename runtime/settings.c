@@ -49,6 +49,8 @@ Settings g_settings = {
     .aspect = ASPECT_UNLOCKED,
     .hud_pos = PLAT_TOUCH ? HUD_EDGES : HUD_CENTERED,  // (phones and tablets: as before the setting, clear of the thumbs)
     .dyn_min = 540,
+    .hdr_white = 200,
+    .hdr_peak = 600,
     .fullscreen = false,
     .volume = 1.0f,
     .reverb = true,
@@ -247,6 +249,9 @@ static bool settings_apply(const char *key, const char *val) {
             if (!strcmp(val, corners[i])) g_settings.fps_corner = i;
     }
     else if (!strcmp(key, "frame_interp")) g_settings.frame_interp = atoi(val) != 0;
+    else if (!strcmp(key, "hdr")) g_settings.hdr = atoi(val) != 0;
+    else if (!strcmp(key, "hdr_white")) { int n = atoi(val); g_settings.hdr_white = n < 80 ? 80 : n > 500 ? 500 : n; }
+    else if (!strcmp(key, "hdr_peak")) { int n = atoi(val); g_settings.hdr_peak = n < 80 ? 80 : n > 10000 ? 10000 : n; }
     else if (!strcmp(key, "metal_hud")) g_settings.metal_hud = atoi(val) != 0;
     else if (!strcmp(key, "resolution")) {  // (auto: never chosen, the GPU's default)
         int n = atoi(val);
@@ -582,6 +587,7 @@ static void write_settings(FILE *f) {
         fprintf(f, "fps_advanced = %d\n", g_settings.fps_advanced);
     }
     fprintf(f, "frame_interp = %d\n", g_settings.frame_interp);
+    fprintf(f, "hdr = %d\nhdr_white = %d\nhdr_peak = %d\n", g_settings.hdr, g_settings.hdr_white, g_settings.hdr_peak);
 #ifdef __APPLE__
     fprintf(f, "metal_hud = %d\n", g_settings.metal_hud);
 #endif

@@ -864,6 +864,9 @@ static void tab_display(void) {
     opt_toggle("Frame Generation", &g_settings.frame_interp, false,
                "Draws extra images between the game's frames for smoother motion, up to your display's refresh rate. On "
                "a 120 Hz display the game shows 120 fps. Some visual glitches are possible.");
+    opt_toggle("HDR", &g_settings.hdr, false,
+               "HDR10 output for HDR displays (turn HDR on in your system's display settings too). Brightness: hdr_white "
+               "and hdr_peak in larecomp.ini. Vulkan only.");
     opt_end();
 }
 
