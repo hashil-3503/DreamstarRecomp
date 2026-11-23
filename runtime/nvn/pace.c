@@ -324,7 +324,22 @@ void pace_hud(PaceHud *h) {
 static double gpu_avg = -1;
 double pace_gpu_frame_ms(void) { return gpu_avg; }
 
+// Kirby's frame limiter (main 0x70000055dc) waits table[mode] x mult vsyncs a frame, and its world steps that many times
+// a frame (0x70000078ec, through 0x7000005698), the table being {1, 2, 3, 4} at main 0x700039a48c. The menus use mode 0
+// (60 fps), the 3D scenes - world map, stages, minigames - mode 1: 30 fps, two world steps a frame. With every entry 1
+// they run one step a frame at 60, the game's own 60 fps path (the speed stays right). FPS target 30 keeps the original.
+static void kirby_fps(void) {
+#ifndef PACE_TEST
+    if (!game_is_kirby()) return;
+    static const uint32_t orig[4] = {1, 2, 3, 4}, fast[4] = {1, 1, 1, 1};
+    uint32_t *t = (uint32_t *)(uintptr_t)0x700039a48cull;
+    const uint32_t *want = settings_fps_target() == FPS_TARGET_30 ? orig : fast;
+    if (memcmp(t, want, sizeof orig)) memcpy(t, want, sizeof orig);
+#endif
+}
+
 void pace_frame(void) {
+    kirby_fps();
     spike_test();
     static int on = -1;
     if (on < 0) { const char *e = getenv("LARECOMP_PACE"); on = !e || atoi(e) != 0; }

@@ -458,6 +458,8 @@ typedef struct {
     AVFrame *pending[NPENDING];
     int64_t pending_time[NPENDING];
     int npending;
+    AVFrame *prev;  // the previous decoded video frame (in-betweens, queue_video_frame)
+    int64_t prev_time;
     bool eos_pending;
     int64_t eos_time;
     bool stopped;  // Stop / destroyed: no more events (see dec_stop)
@@ -590,13 +592,13 @@ static void dec_stop(Cpu *c) {
     c->x[0] = 0;
 }
 
-static uint64_t n_acq_in, n_send, n_acq_out, n_get_out, n_rel_out, n_frames;
+static uint64_t n_acq_in, n_send, n_acq_out, n_get_out, n_rel_out, n_frames, n_mid;  // (n_mid: in-betweens, queue_video_frame)
 static void movie_stats(void) {
     static uint64_t last;
     uint64_t now = n_acq_in + n_send + n_acq_out + n_rel_out;
     if (now / 200 != last / 200)
-        LOG("[movie] acq_in %llu send %llu frames %llu acq_out %llu get_out %llu rel_out %llu\n", n_acq_in, n_send,
-            n_frames, n_acq_out, n_get_out, n_rel_out);
+        LOG("[movie] acq_in %llu send %llu frames %llu (+%llu in-between) acq_out %llu get_out %llu rel_out %llu\n", n_acq_in, n_send,
+            n_frames, n_mid, n_acq_out, n_get_out, n_rel_out);
     last = now;
 }
 
@@ -690,6 +692,64 @@ static bool flush_pending(Decoder *d) {
     return any;
 }
 
+// Queue a decoded frame for the game: into a free output slot, or behind what is already pending (keeps the order).
+static void queue_frame(Decoder *d, AVFrame *f, int64_t t) {
+    if (d->npending || !emit_frame(d, f, t, 0)) {
+        if (d->npending < NPENDING) {
+            d->pending[d->npending] = av_frame_clone(f);
+            d->pending_time[d->npending++] = t;
+        } else {
+            LOG("[movie] output queue full, dropping frame\n");
+        }
+    }
+}
+
+// Kirby's movies are 30 fps and its player shows each frame at its time: an in-between frame (the average of its two
+// neighbours, at the time halfway) before each one makes them 60. LARECOMP_MOVIE_INTERP=0: off. A cross-fade, not
+// motion-compensated: where much of the image moves (the intro's Kirby jumping ~100 px a frame: two Kirbys in the
+// in-between) or at a cut it would show both images, so there the frame is held two vsyncs as before (big_change).
+// ponytail: blend only; motion-compensated in-betweens (optical flow on the GPU) for smooth fast motion.
+static bool big_change(const AVFrame *a, const AVFrame *b) {  // over 2% of the luma (1 in 16 sampled) changed by > 40
+    int n = 0, over = 0;
+    for (int y = 0; y < a->height; y += 4)
+        for (int x = 0; x < a->width; x += 4, n++) {
+            int v = a->data[0][(size_t)y * a->linesize[0] + x] - b->data[0][(size_t)y * b->linesize[0] + x];
+            over += v > 40 || v < -40;
+        }
+    return over * 50 > n;
+}
+
+static void queue_video_frame(Decoder *d, AVFrame *f, int64_t t) {
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("LARECOMP_MOVIE_INTERP"); on = game_is_kirby() && (!e || atoi(e) != 0); }
+    if (!on) { queue_frame(d, f, t); return; }
+    AVFrame *p = d->prev;
+    int64_t gap = t - d->prev_time;  // (microseconds: only a 30 fps gap - not after a seek, nor for a 60 fps movie)
+    if (p && p->format == AV_PIX_FMT_YUV420P && f->format == AV_PIX_FMT_YUV420P && p->width == f->width &&
+        p->height == f->height && gap > 25000 && gap < 45000 && !big_change(p, f)) {
+        AVFrame *m = av_frame_alloc();
+        if (m) m->format = f->format, m->width = f->width, m->height = f->height;
+        if (m && av_frame_get_buffer(m, 0) == 0) {
+            for (int k = 0; k < 3; k++) {
+                int w = k ? f->width / 2 : f->width, h = k ? f->height / 2 : f->height;
+                for (int y = 0; y < h; y++) {
+                    const uint8_t *a = p->data[k] + (size_t)y * p->linesize[k], *b = f->data[k] + (size_t)y * f->linesize[k];
+                    uint8_t *o = m->data[k] + (size_t)y * m->linesize[k];
+                    for (int x = 0; x < w; x++) o[x] = (uint8_t)((a[x] + b[x] + 1) >> 1);
+                }
+            }
+            queue_frame(d, m, d->prev_time + gap / 2);
+            n_mid++;
+        }
+        av_frame_free(&m);
+    }
+    if (!d->prev) d->prev = av_frame_alloc();
+    av_frame_unref(d->prev);
+    av_frame_ref(d->prev, f);
+    d->prev_time = t;
+    queue_frame(d, f, t);
+}
+
 static void dec_send_input(Cpu *c) {
     Decoder *d = self_state(c);
     n_send++;
@@ -708,15 +768,8 @@ static void dec_send_input(Cpu *c) {
     bool produced = false;
     while (avcodec_receive_frame(d->ctx, d->frame) == 0) {
         int64_t t = d->frame->pts != AV_NOPTS_VALUE ? d->frame->pts : time;
-        // keep order: queue behind anything already pending
-        if (d->npending || !emit_frame(d, d->frame, t, 0)) {
-            if (d->npending < NPENDING) {
-                d->pending[d->npending] = av_frame_clone(d->frame);
-                d->pending_time[d->npending++] = t;
-            } else {
-                LOG("[movie] output queue full, dropping frame\n");
-            }
-        }
+        if (d->video) queue_video_frame(d, d->frame, t);
+        else queue_frame(d, d->frame, t);
         n_frames++;
         produced = true;
     }
@@ -818,6 +871,7 @@ static void dec_free(Decoder *d) {
     for (int i = 0; i < d->npending; i++) av_frame_free(&d->pending[i]);
     d->npending = d->nready = 0;
     av_frame_free(&d->frame);
+    av_frame_free(&d->prev);
     av_packet_free(&d->pkt);
     if (d->sws) sws_freeContext(d->sws), d->sws = NULL;
     free(d->rgba), d->rgba = NULL;
