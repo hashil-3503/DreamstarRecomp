@@ -798,11 +798,18 @@ static void tab_display(void) {
         static const int fps_target[] = {FPS_TARGET_30, FPS_TARGET_MIXED, FPS_TARGET_60};
         int fi = 2;
         for (int i = 0; i < 3; i++) if (fps_target[i] == g_settings.fps_target) fi = i;
+        if (game_is_kirby()) {  // (Kirby: the game's own frame rate, pace.c kirby_fps - 30 is the original's in 3D)
+            static const char *kfps[] = {LN("30"), LN("60")};
+            int ki = g_settings.fps_target == FPS_TARGET_30 ? 0 : 1;
+            if (opt_choice("FPS target", &ki, kfps, 2, 1, "The game's frame rate. 30 is the original's."))
+                g_settings.fps_target = ki ? FPS_TARGET_60 : FPS_TARGET_30;
+        } else {
         if (!dyn) opt_disable_next(), opt_needs_next("Dynamic resolution");
         if (opt_choice("FPS target", &fi, fps, 3, 2,
                        "The frame rate Dynamic resolution aims for. 60FPS will prioritize smoothness, 30FPS will "
                        "prioritize visual quality."))
             g_settings.fps_target = fps_target[fi];
+        }
     }
     {  // Dynamic's floor (output_scale.c dyn_set_floor)
         static const char *mins[] = {LN("360p"), LN("540p"), LN("720p")};
