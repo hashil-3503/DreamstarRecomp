@@ -908,7 +908,7 @@ static void fill_state(Cpu *c) {
     touch_stick(&tlx, &tly);
     int32_t lx = clamp_axis((menu ? 0 : key_lx + pad_lx + tlx) + script_lx), ly = clamp_axis((menu ? 0 : key_ly + pad_ly + tly) + script_ly);
     int32_t rx = clamp_axis((menu ? 0 : key_rx + pad_rx) + script_rx), ry = clamp_axis((menu ? 0 : key_ry + pad_ry) + script_ry);
-    if (game_is_kirby()) goto write;  // (the d-pad items, mirror mode, door jumps, companions: Zelda's)
+    if (game_is_kirby()) goto stick_bits;  // (the d-pad items, mirror mode, door jumps, companions: Zelda's)
     if (!menu) {  // d-pad items (setting): the Items page assigns, play uses (runtime/hle/dpad_items.c; before mirroring:
         extern uint64_t dpad_items_input(uint64_t b);  // the d-pad as held)
         b = dpad_items_input(b);
@@ -940,6 +940,7 @@ static void fill_state(Cpu *c) {
             b &= ~(0xfull << 12);
         }
     }
+stick_bits:
     // stick directions also appear as buttons (bits 16-23)
     if (lx < -16000) b |= 1ull << 16;
     if (ly > 16000) b |= 1ull << 17;
@@ -949,6 +950,7 @@ static void fill_state(Cpu *c) {
     if (ry > 16000) b |= 1ull << 21;
     if (rx > 16000) b |= 1ull << 22;
     if (ry < -16000) b |= 1ull << 23;
+    if (game_is_kirby()) goto write;
     {   // the pause menu's companion slot (runtime/hle/pets.c) takes the d-pad / sticks / A while the cursor is on it
         extern uint64_t pets_menu_input(uint64_t b, int32_t st[4]);
         int32_t st[4] = {lx, ly, rx, ry};
