@@ -77,6 +77,13 @@ HLE_FUNC("_ZNK5movie9MediaData9FindInt32EPKcPi", md_find_int32) {
         if (!m->e[i].is_str && !strcmp(m->e[i].key, k)) { *(int32_t *)(uintptr_t)c->x[2] = (int32_t)m->e[i].ival; c->x[0] = 1; return; }
     c->x[0] = 0;
 }
+HLE_FUNC("_ZNK5movie9MediaData9FindInt64EPKcPl", md_find_int64) {  // (Kirby: "durationUs")
+    MediaData *m = md(c->x[0]);
+    const char *k = (const char *)(uintptr_t)c->x[1];
+    for (int i = 0; i < m->n; i++)
+        if (!m->e[i].is_str && !strcmp(m->e[i].key, k)) { *(int64_t *)(uintptr_t)c->x[2] = m->e[i].ival; c->x[0] = 1; return; }
+    c->x[0] = 0;
+}
 HLE_FUNC("_ZNK5movie9MediaData10FindStringEPKcPS2_", md_find_string) {
     MediaData *m = md(c->x[0]);
     const char *k = (const char *)(uintptr_t)c->x[1];
@@ -248,6 +255,12 @@ static void ex_set_data_source(Cpu *c) {
     c->x[0] = 0;
 }
 
+// Slot 2, SetDataSource(const char *path): Kirby's way (Zelda passes a stream reader and the path to slot 15)
+static void ex_set_data_source_path(Cpu *c) {
+    c->x[2] = c->x[1];
+    ex_set_data_source(c);
+}
+
 static void ex_get_track_count(Cpu *c) {
     Extractor *e = self_state(c);
     *(int32_t *)(uintptr_t)c->x[1] = e->fmt ? e->ntracks : 0;
@@ -395,11 +408,12 @@ EX_LOCKED(ex_advance)
 EX_LOCKED(ex_get_sample_time)
 EX_LOCKED(ex_cached_duration)
 EX_LOCKED(ex_set_data_source)
+EX_LOCKED(ex_set_data_source_path)
 
 HLE_FUNC("_ZN5movie9ExtractorC1ENS_13ContainerTypeE", movie_extractor_ctor) {
     uint64_t vt = g_ex_vt;
     if (!vt) {
-        HostFn f[16] = {ex_dtor_l, ex_dtor_l, movie_log_slot, movie_log_slot, ex_get_track_count_l,
+        HostFn f[16] = {ex_dtor_l, ex_dtor_l, ex_set_data_source_path_l, movie_log_slot, ex_get_track_count_l,
                         ex_get_track_config_l, ex_select_track_l, movie_log_slot, ex_seek_l, ex_get_sample_track_l,
                         ex_read_l, ex_advance_l, ex_get_sample_time_l, movie_log_slot, ex_cached_duration_l,
                         ex_set_data_source_l};
@@ -730,6 +744,9 @@ static void dec_get_output_buffer(Cpu *c) {
     int i = (int)c->x[1];
     MBuffer *b = BUF(c->x[2]);
     if (i < 0 || i >= NOUT) { c->x[0] = 1; return; }
+    static int nlog;
+    if (nlog < 4) nlog++, LOG("[movie] output buffer: video %d base %llx capacity %llu\n", d->video,
+                               (unsigned long long)b->base, (unsigned long long)b->capacity);
     if (d->video && b->base && b->capacity == 8) {
         // texture output mode: the buffer points at the game's NVNtexture; write RGBA into it
         NvnTexture *t = *(NvnTexture **)(uintptr_t)b->base;
@@ -751,6 +768,19 @@ static void dec_get_output_buffer(Cpu *c) {
         int dst_stride[1] = {w * 4};
         sws_scale(d->sws, src, src_stride, 0, h, dst, dst_stride);
         renderer_upload_rgba(t, d->rgba, (uint32_t)w, (uint32_t)h, (uint32_t)w * 4);
+        c->x[0] = 0;
+        return;
+    }
+    if (d->video && b->base && b->capacity >= (uint64_t)d->width * d->height * 3 / 2) {
+        // Kirby: its own buffer for the frame, NV12 with rows of the image's width and no padding rows
+        int w = d->width, h = d->height, ah = (h + 15) & ~15;
+        uint8_t *dst = (uint8_t *)(uintptr_t)b->base;
+        const uint8_t *src = d->out_mem[i];
+        for (int y = 0; y < h; y++) memcpy(dst + (size_t)y * w, src + (size_t)y * d->stride, (size_t)w);
+        for (int y = 0; y < h / 2; y++)
+            memcpy(dst + (size_t)w * h + (size_t)y * w, src + (size_t)d->stride * ah + (size_t)y * d->stride, (size_t)w);
+        b->offset = 0;
+        b->size = w * h * 3 / 2;
         c->x[0] = 0;
         return;
     }
@@ -836,3 +866,9 @@ HLE_FUNC("_ZN5movie7DecoderC1ENS_11DecoderTypeENS_19DecoderOutputFormatENS_11Dec
     self[0] = vt;
     self[1] = (uint64_t)(uintptr_t)d;
 }
+// Kirby's SDK: the same decoder without the last (thread count) argument
+HLE_FUNC("_ZN5movie7DecoderC1ENS_11DecoderTypeENS_19DecoderOutputFormatENS_11DecoderModeE", movie_decoder_ctor3) {
+    movie_decoder_ctor(c);
+}
+// (Kirby: the decoders' CPU cores; FFmpeg picks its own)
+HLE_FUNC("_ZN5movie11SetCoreMaskEm", movie_set_core_mask) { (void)c; }
