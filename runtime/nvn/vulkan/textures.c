@@ -155,6 +155,18 @@ static VkFmt fmt_of(uint32_t f) {
 }
 
 bool renderer_format_is_depth(uint32_t f) { return f >= 0x31 && f <= 0x36; }
+// (pure) integer colour formats: sampled, they give the raw integers (maxwell/translate.c: the integer lookup path)
+bool renderer_format_is_int(uint32_t f) {
+    switch (fmt_of(f).vf) {
+    case VK_FORMAT_R8_UINT: case VK_FORMAT_R8_SINT: case VK_FORMAT_R8G8_UINT: case VK_FORMAT_R8G8_SINT:
+    case VK_FORMAT_R8G8B8A8_UINT: case VK_FORMAT_R8G8B8A8_SINT: case VK_FORMAT_R16_UINT: case VK_FORMAT_R16_SINT:
+    case VK_FORMAT_R16G16_UINT: case VK_FORMAT_R16G16_SINT: case VK_FORMAT_R16G16B16A16_UINT: case VK_FORMAT_R16G16B16A16_SINT:
+    case VK_FORMAT_R32_UINT: case VK_FORMAT_R32_SINT: case VK_FORMAT_R32G32_UINT: case VK_FORMAT_R32G32_SINT:
+    case VK_FORMAT_R32G32B32A32_UINT: case VK_FORMAT_R32G32B32A32_SINT: case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+        return true;
+    default: return false;
+    }
+}
 bool renderer_format_has_stencil(uint32_t f) { return f == 0x31 || f == 0x35 || f == 0x36; }
 VkFormat vk_format(uint32_t f) { return fmt_of(f).vf; }
 bool vk_format_alpha_one(uint32_t f) { return fmt_of(f).alpha_one; }

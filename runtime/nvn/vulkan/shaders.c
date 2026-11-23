@@ -227,6 +227,9 @@ int vk_reflect(const uint32_t *spv, size_t n, VkBindingInfo *out, int max) {
         else if (op[t] == OP_TYPE_STRUCT && (sc[id] == SC_STORAGE_BUFFER || (flags[t] & 2))) dt = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         else if (op[t] == OP_TYPE_STRUCT && sc[id] == SC_UNIFORM) dt = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         else continue;
+        int k = 0;  // (a texture slot's float and integer samplers share its binding: translate.c)
+        while (k < cnt && !(out[k].set == (uint32_t)(set[id] < 0 ? 0 : set[id]) && out[k].binding == (uint32_t)binding[id])) k++;
+        if (k < cnt) continue;
         out[cnt++] = (VkBindingInfo){(uint32_t)(set[id] < 0 ? 0 : set[id]), (uint32_t)binding[id], dt};
     }
     free(binding); free(set); free(flags); free(op); free(ref); free(sc);

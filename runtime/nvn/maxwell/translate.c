@@ -656,6 +656,30 @@ static const char *uv2(Ctx *c, int slot, const char *x, const char *y, char *buf
 // reference or NULL, lod_kind 0 implicit / 1 level / 2 bias (lod), off: ivec2 texel offset or NULL.
 // GLSL offsets must be constants, so register offsets move the coordinates by offset / size of the level
 // (level 0 for implicit-LOD lookups). Non-fragment stages have no implicit LOD: level 0 (+ bias).
+// Integer textures (Kirby's G-buffer material ids, RGBA8 UINT): Maxwell lookups return their raw integers, which a
+// float sampler can't. A 2D slot outside vertex shaders also gets a usampler on its binding; the lookups go through
+// tx / txl / txf helpers that take it when the host flags the bound texture as integer (rscale x negative, exec.c
+// tex_int). `call` starts with the plain lookup on t<slot>.
+static bool int_routed(Ctx *c, int slot) {
+    const ShaderTexture *t = &c->info->tex[slot];
+    return c->glsl && c->stage != STAGE_VERTEX && t->type == TEXTYPE_2D && !t->shadow;
+}
+static void int_route(Ctx *c, char *call, int slot) {
+    if (!int_routed(c, slot)) return;
+    static const char *const from[] = {"texelFetch(t", "textureLod(t", "texture(t"}, *const to[] = {"txf", "txl", "tx"};
+    for (int k = 0; k < 3; k++) {
+        size_t n = strlen(from[k]);
+        if (strncmp(call, from[k], n)) continue;
+        char tmp[4096];
+        const char *rest = call + n;
+        while (*rest >= '0' && *rest <= '9') rest++;
+        if (strncmp(rest, ", ", 2)) return;
+        snprintf(tmp, sizeof tmp, "%s%d(%s", to[k], slot, rest + 2);
+        strcpy(call, tmp);
+        return;
+    }
+}
+
 static void glsl_sample(Ctx *c, char *out, int slot, const char *const *co, const char *layer, const char *dref,
                         int lod_kind, const char *lod, const char *off) {
     if (c->fail) { strcpy(out, "vec4(0.0f)"); return; }  // e.g. a type conflict: tex[slot] is not this lookup's type
@@ -706,7 +730,7 @@ static void glsl_sample(Ctx *c, char *out, int slot, const char *const *co, cons
     else if (lod_kind == 1) snprintf(e, sizeof e, "textureLod(t%d, %s%s, %s)", slot, P, ex, lod);
     else snprintf(e, sizeof e, "texture(t%d, %s%s, %s)", slot, P, ex, lod);
     if (t->shadow) sprintf(out, "vec4(%s)", e);
-    else strcpy(out, e);
+    else { strcpy(out, e); int_route(c, out, slot); }
 }
 
 // TEXS / TLDS in GLSL (same slot allocation order and result layout as the MSL switch in emit_texs)
@@ -758,17 +782,17 @@ static bool glsl_texs(Ctx *c, uint64_t w, bool fetch, int *slot_out, char *call,
         case 1: slot = tex_slot(c, index, TEXTYPE_1D, false, false);
             sprintf(call, "texelFetch(t%d, int(%s), int(%s))", slot, A, Bv); break;
         case 2: slot = tex_slot(c, index, TEXTYPE_2D, false, false);
-            sprintf(call, "texelFetch(t%d, ivec2(%s), 0)", slot, RSC2(c, slot, "uint2(%s, %s)", A, Bv)); break;
+            sprintf(call, "texelFetch(t%d, ivec2(%s), 0)", slot, RSC2(c, slot, "uint2(%s, %s)", A, Bv)); int_route(c, call, slot); break;
         case 4: slot = tex_slot(c, index, TEXTYPE_2D, false, false);
-            sprintf(call, "texelFetch(t%d, ivec2(%s), 0)", slot, RSC2(c, slot, "uint2(int2(%s, %s) + int2(int(%s << 28) >> 28, int(%s << 24) >> 28))", A, A1, Bv, Bv)); break;
+            sprintf(call, "texelFetch(t%d, ivec2(%s), 0)", slot, RSC2(c, slot, "uint2(int2(%s, %s) + int2(int(%s << 28) >> 28, int(%s << 24) >> 28))", A, A1, Bv, Bv)); int_route(c, call, slot); break;
         case 5: slot = tex_slot(c, index, TEXTYPE_2D, false, false);
-            sprintf(call, "texelFetch(t%d, ivec2(%s), int(%s))", slot, RSC2(c, slot, "uint2(%s, %s)", A, A1), Bv); break;
+            sprintf(call, "texelFetch(t%d, ivec2(%s), int(%s))", slot, RSC2(c, slot, "uint2(%s, %s)", A, A1), Bv); int_route(c, call, slot); break;
         case 7: slot = tex_slot(c, index, TEXTYPE_3D, false, false);
             sprintf(call, "texelFetch(t%d, ivec3(%s, %s, %s), 0)", slot, A, A1, Bv); break;
         case 8: slot = tex_slot(c, index, TEXTYPE_2D_ARRAY, false, true);
             sprintf(call, "texelFetch(t%d, ivec3(ivec2(%s), int(%s)), 0)", slot, RSC2(c, slot, "uint2(%s, %s)", A1, Bv), A); break;
         case 12: slot = tex_slot(c, index, TEXTYPE_2D, false, false);
-            sprintf(call, "texelFetch(t%d, ivec2(%s), int(%s))", slot, RSC2(c, slot, "uint2(int2(%s, %s) + int2(int(%s << 28) >> 28, int(%s << 24) >> 28))", A, A1, B1, B1), Bv); break;
+            sprintf(call, "texelFetch(t%d, ivec2(%s), int(%s))", slot, RSC2(c, slot, "uint2(int2(%s, %s) + int2(int(%s << 28) >> 28, int(%s << 24) >> 28))", A, A1, B1, B1), Bv); int_route(c, call, slot); break;
         default: fail(c, "tlds info %d", info); return false;
         }
     }
@@ -1068,7 +1092,9 @@ static void emit_insn(Ctx *c, uint64_t w, uint32_t pc) {
         c->info->uses_discard = true;
         if (getenv("LARECOMP_NO_DISCARD")) {
         } else if (!c->glsl) sp(&c->body, "    discard_fragment();\n");
-        else if (c->stage == STAGE_FRAGMENT) sp(&c->body, "    discard;\n");
+        // KIL leaves the pixel as a helper: its quad neighbours keep their derivatives for the texture lookups after
+        // it (a discard there gave Kirby's alpha-tested grass and leaves garbage mip levels along their edges)
+        else if (c->stage == STAGE_FRAGMENT) sp(&c->body, "    demote;\n");
         else sp(&c->body, "    /* kil */\n");  // GLSL has discard in fragment shaders only
     } else if (OPM(0xe240000000000000ull, 0xfff0000000000020ull)) {  // BRA
         uint32_t target = norm_target((int64_t)pc + 8 + sbits(w, 20, 24));
@@ -2030,6 +2056,7 @@ static const char glsl_prelude[] =
     "#extension GL_KHR_shader_subgroup_shuffle : require\n"
     "#extension GL_KHR_shader_subgroup_shuffle_relative : require\n"
     "#extension GL_EXT_texture_shadow_lod : require\n"
+    "#extension GL_EXT_demote_to_helper_invocation : require\n"
     "#define cbr(cb, off) cb[min((off) >> 4, uint(cb.length() - 1))][((off) >> 2) & 3u]\n"
     "uint as_u(float x) { return floatBitsToUint(x); }\n"
     "uint as_u(uint x) { return x; }\n"
@@ -2056,7 +2083,7 @@ static const char glsl_prelude[] =
     "uint bfe_s(uint v, uint ctl) { uint pos = ctl & 0xFFu, len = (ctl >> 8) & 0xFFu; if (len == 0u) return 0u; if (pos >= 32u) return (int(v) < 0) ? 0xFFFFFFFFu : 0u; return uint(bitfieldExtract(int(v), int(pos), int(min(len, 32u - pos)))); }\n"
     "uint bfi(uint ins, uint ctl, uint base) { uint pos = ctl & 0xFFu, len = (ctl >> 8) & 0xFFu; if (len == 0u || pos >= 32u) return base; return bitfieldInsert(base, ins, int(pos), int(min(len, 32u - pos))); }\n"
     "float fswzadd(float a, float b, uint swz, uint lane) { uint m = (swz >> ((lane & 3u) * 2u)) & 3u; float ma = m == 1u ? -1.0f : (m == 3u ? 0.0f : 1.0f); float mb = m == 2u ? -1.0f : 1.0f; return a * ma + b * mb; }\n"
-    "uvec2 rsc(uvec2 c, vec4 s) { return (s.x == 1.0f && s.y == 1.0f) ? c : uvec2(floor((vec2(c) + 0.5f) * s.xy)); }\n"
+    "uvec2 rsc(uvec2 c, vec4 s) { return (abs(s.x) == 1.0f && s.y == 1.0f) ? c : uvec2(floor((vec2(c) + 0.5f) * abs(s.xy))); }\n"
     // a scaled texture whose contents occupy its top-left part (Dynamic resolution): sample that part
     "vec2 uvs(vec2 uv, vec4 s) { return (s.z == 1.0f && s.w == 1.0f) ? uv : min(uv, 1.0f) * s.zw; }\n";
 // The half <-> float helpers (glsl_finish: glsl_h2f_exact or glsl_h2f_native, then glsl_prelude_half).
@@ -2347,6 +2374,15 @@ static ShaderInfo *glsl_finish(Ctx *c, bool any_branch, bool dbg) {
         case TEXTYPE_3D: case TEXTYPE_2D_ARRAY: case TEXTYPE_CUBE_ARRAY:
             sp(&s, "ivec3 tsize%d(int l) { return textureSize(t%d, l); }\n", i, i); break;
         default: sp(&s, "ivec3 tsize%d(int l) { return ivec3(textureSize(t%d, l), 1); }\n", i, i);
+        }
+        if (c->uses_rscale && int_routed(c, i)) {  // (int_route)
+            int r = i + 1;
+            sp(&s, "layout(set = %d, binding = %d) uniform usampler2D ut%d;\n", set, 32 + i, i);
+            sp(&s, "ivec2 txp%d(vec2 p) { ivec2 s = textureSize(ut%d, 0); return clamp(ivec2(floor(p * vec2(s))), ivec2(0), s - 1); }\n", i, i);
+            sp(&s, "vec4 tx%d(vec2 p) { return rscale[%d].x < 0.0f ? uintBitsToFloat(texelFetch(ut%d, txp%d(p), 0)) : texture(t%d, p); }\n", i, r, i, i, i);
+            sp(&s, "vec4 tx%d(vec2 p, float b) { return rscale[%d].x < 0.0f ? uintBitsToFloat(texelFetch(ut%d, txp%d(p), 0)) : texture(t%d, p, b); }\n", i, r, i, i, i);
+            sp(&s, "vec4 txl%d(vec2 p, float l) { return rscale[%d].x < 0.0f ? uintBitsToFloat(texelFetch(ut%d, txp%d(p), 0)) : textureLod(t%d, p, l); }\n", i, r, i, i, i);
+            sp(&s, "vec4 txf%d(ivec2 p, int l) { return rscale[%d].x < 0.0f ? uintBitsToFloat(texelFetch(ut%d, p, l)) : texelFetch(t%d, p, l); }\n", i, r, i, i);
         }
     }
     if (stage == STAGE_VERTEX) {
