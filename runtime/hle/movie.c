@@ -233,6 +233,17 @@ static void ex_set_data_source(Cpu *c) {
     const char *rel = path && strstr(path, ":/") ? strstr(path, ":/") + 2 : path;
     char host[1024];
     snprintf(host, sizeof host, "%s/%s", g_romfs_dir, rel ? rel : "");
+    if (game_is_kirby() && rel) {
+        // Kirby's movies are 30 fps: a 60 fps copy made from the player's own file (motion-interpolated -
+        // tools/kirby_movies60.sh) in <data>/cache/movie60/ is played instead when there is one. Without it, the
+        // blended in-betweens (queue_video_frame). LARECOMP_MOVIE60=0: the original.
+        extern const char *rt_data_root(void);
+        const char *base = strrchr(rel, '/') ? strrchr(rel, '/') + 1 : rel, *e = getenv("LARECOMP_MOVIE60");
+        char alt[1024];
+        snprintf(alt, sizeof alt, "%s/cache/movie60/%s", rt_data_root(), base);
+        FILE *f = (!e || atoi(e)) ? fopen(alt, "rb") : NULL;
+        if (f) fclose(f), snprintf(host, sizeof host, "%s", alt);
+    }
     LOG("[movie] open %s -> %s\n", path ? path : "(null)", host);
     { extern void pace_hitch(const char *why);  // nvn/pace.c
       pace_hitch("a movie"); }
