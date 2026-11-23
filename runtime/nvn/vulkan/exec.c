@@ -2827,6 +2827,15 @@ static void ct_draw(Prog *pr, const char *what) {
             if (t) LOG(" %s%p/%#x", sg ? "" : "v:", (void *)t, t->format);
         }
     LOG("\n");
+    for (int sg = 0; sg < 2; sg++)
+        for (int i = 0; i < 18; i++) {
+            Range u = st.ubuf[sg][i];
+            if (!u.addr) continue;
+            const float *f = (const float *)(uintptr_t)u.addr;
+            LOG("[ct]   ubo s%d.%d %llx size %llu:", sg, i, (unsigned long long)u.addr, (unsigned long long)u.size);
+            for (int k = 0; k < 16 && k * 4 < (int)u.size; k++) LOG(" %g", f[k]);
+            LOG("\n");
+        }
 }
 
 // ================================================================== copy elision (depth copies)

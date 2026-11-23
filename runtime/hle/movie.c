@@ -20,6 +20,7 @@
 
 #include "../hle.h"
 #include "../settings.h"
+#include "../game_addresses.h"
 
 #define MOVIE_EOS 4u
 
@@ -537,10 +538,16 @@ static void dec_output_format(Decoder *d, MediaData *m) {
         md_set_str(m, "mime", "video/raw");
         md_set_int(m, "width", d->width);
         md_set_int(m, "height", d->height);
-        md_set_int(m, "nv12-y-stride", d->stride);
+        // Kirby copies the frame out of its own buffer with these: dec_get_output_buffer packs it there (rows of the
+        // image's width, chroma right after the luma) - the padded layout would not fit the buffer
+        bool packed = game_is_kirby();
+        md_set_int(m, "nv12-y-stride", packed ? d->width : d->stride);
         md_set_int(m, "nv12-y-offset", 0);
-        md_set_int(m, "nv12-uv-offset", d->stride * ((d->height + 15) & ~15));
-        md_set_int(m, "nv12-colorspace", 0);
+        md_set_int(m, "nv12-uv-offset", packed ? d->width * d->height : d->stride * ((d->height + 15) & ~15));
+        // 1 BT.601, 2 BT.601 full range, 3 BT.709, 4 BT.709 full range (Kirby picks its YUV -> RGB matrix by this,
+        // and draws black for anything else; untagged HD video is BT.709)
+        bool bt709 = d->ctx->colorspace == AVCOL_SPC_BT709 || (d->ctx->colorspace == AVCOL_SPC_UNSPECIFIED && d->height >= 720);
+        md_set_int(m, "nv12-colorspace", (bt709 ? 3 : 1) + (d->ctx->color_range == AVCOL_RANGE_JPEG));
     } else {
         md_set_str(m, "mime", "audio/raw");
         md_set_int(m, "sample-rate", d->sample_rate);
