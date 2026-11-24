@@ -144,6 +144,13 @@ typedef struct TexBackend {
     // (g_vk.lean_usage) the only formats views of this image may have: nview_fmt 0 = any compatible one
     VkFormat view_fmt[2];
     uint8_t nview_fmt;
+    // a mod's HD replacement (runtime/mods.c, textures.c hd_load): sampled in place of the image, for the contents
+    // that hash to hd_hash (0: not looked up yet)
+    VkImage hd_image;
+    VmaAllocation hd_mem;
+    VkImageView hd_view;
+    VkComponentMapping hd_sw;  // (the swizzle hd_view was made with)
+    uint64_t hd_hash;
 } TexBackend;
 
 TexBackend *vk_tex(NvnTexture *t, bool for_render);  // backend image (uploads CPU contents unless for_render)

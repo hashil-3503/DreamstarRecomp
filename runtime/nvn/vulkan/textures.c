@@ -1,5 +1,6 @@
 // Vulkan textures: NVN formats, images, change-detected uploads from guest memory, views and samplers
 // (counterpart of the texture half of metal.m and the view helpers of renderer.m).
+#include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_timer.h>
 #include <float.h>
 #include <math.h>
@@ -18,6 +19,7 @@
 #include "../texpatch.h"
 #include "../output_scale.h"
 #include "../../settings.h"
+#include "../../mods.h"
 
 // ================================================================== formats
 typedef struct { VkFormat vf; uint8_t expand_rgb, alpha_one; } VkFmt;
@@ -557,7 +559,143 @@ void vk_dl_note_upload(void *img, uint32_t w, uint32_t h, uint32_t lv);  // (exe
 static uint32_t level_w(const TexBackend *b, uint32_t lv) { uint32_t v = b->width >> lv; return v ? v : 1; }
 static uint32_t level_h(const TexBackend *b, uint32_t lv) { uint32_t v = b->height >> lv; return v ? v : 1; }
 
+// ---- HD texture packs (runtime/mods.c): <mod>/textures/<hash>.png replaces one layer of a texture: <hash> is
+// tex_hash_full of that layer's data (all its levels). Kirby's level textures are 2D arrays (3-41 layers), so packs
+// go by layer. The texture is then sampled from an RGBA8 copy at the PNG's size with a full mip chain made by blits;
+// the layers without a PNG are the game's own, decoded and scaled up into it. Render targets, cube maps, 3D and
+// multisampled textures keep their own. LARECOMP_TEX_DUMP=1 writes each layer's first level as
+// <data>/texdump/<hash>.png (RGBA8 / BC / ASTC colour formats) to make packs from.
+static void hd_drop(TexBackend *b) {
+    extern uint32_t vk_view_gen;
+    if (b->hd_view) defer((Dead){.view = b->hd_view}), vk_view_gen++;
+    if (b->hd_image) defer((Dead){.img = b->hd_image, .mem = b->hd_mem});
+    b->hd_image = VK_NULL_HANDLE, b->hd_mem = VK_NULL_HANDLE, b->hd_view = VK_NULL_HANDLE;
+}
+static bool fmt_srgb(VkFormat f) {
+    switch (f) {
+    case VK_FORMAT_R8G8B8A8_SRGB: case VK_FORMAT_B8G8R8A8_SRGB: case VK_FORMAT_BC1_RGB_SRGB_BLOCK: case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+    case VK_FORMAT_BC2_SRGB_BLOCK: case VK_FORMAT_BC3_SRGB_BLOCK: case VK_FORMAT_BC7_SRGB_BLOCK: return true;
+    default: return false;
+    }
+}
+static bool fmt_astc(VkFormat f) { return f >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK && f <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK; }
+static bool fmt_srgb_astc(VkFormat f) { return fmt_astc(f) && (f - VK_FORMAT_ASTC_4x4_UNORM_BLOCK) % 2; }  // (UNORM, SRGB alternate)
+static bool hd_srgb(const TexBackend *b) { return fmt_srgb(b->format) || fmt_srgb_astc(b->format) || b->astc_srgb; }
+static bool hd_eligible(const TexBackend *b) {
+    return !b->gpu_owned && (b->base_type == VK_IMAGE_VIEW_TYPE_2D || b->base_type == VK_IMAGE_VIEW_TYPE_2D_ARRAY) && b->depth == 1 &&
+           b->samples == 1 && b->aspect == VK_IMAGE_ASPECT_COLOR_BIT;
+}
+// A layer's first level as RGBA8 (malloc'd), or NULL for formats with no decoder here (and BC6H's half floats).
+static uint8_t *hd_decode_layer(const NvnTexture *t, const TexBackend *b, uint32_t layer, uint32_t *w, uint32_t *h) {
+    const FormatInfo *fi = t->layout.fmt;
+    LevelLayout l = tegra_level(&t->layout, 0);
+    int bc = b->cpu_bc ? b->cpu_bc : bc_kind(b->format);
+    bool astc = b->astc_bw || fmt_astc(b->format), rgba = b->format == VK_FORMAT_R8G8B8A8_UNORM || b->format == VK_FORMAT_R8G8B8A8_SRGB;
+    if (!(bc && bc_texel_bytes(bc) == 4) && !astc && !rgba) return NULL;
+    const uint8_t *src = (const uint8_t *)(uintptr_t)t->addr + layer * tegra_layer_size(&t->layout) + l.offset;
+    uint32_t brow = l.wb * fi->bpb;
+    uint8_t *lin = malloc((uint64_t)brow * l.hb), *px = malloc((uint64_t)l.w * l.h * 4);
+    if (t->flags & 0x10) for (uint32_t y = 0; y < l.hb; y++) memcpy(lin + (uint64_t)y * brow, src + (uint64_t)y * t->stride, brow);
+    else tegra_deswizzle(src, lin, l.wb, l.hb, 1, fi->bpb, l.block_height_log2, l.block_depth_log2);
+    if (bc && !astc) bc_decode(bc, lin, l.w, l.h, px);
+    else if (astc) astc_decode_ldr(lin, l.w, l.h, fi->bw, fi->bh, hd_srgb(b), px);
+    else memcpy(px, lin, (uint64_t)l.w * l.h * 4);
+    free(lin);
+    *w = l.w, *h = l.h;
+    return px;
+}
+static void hd_dump(uint64_t hash, const uint8_t *rgba, uint32_t w, uint32_t h) {
+    char p[1200];
+    struct stat sb;
+    snprintf(p, sizeof p, "%s/%016llx.png", mods_texture_dump_dir(), (unsigned long long)hash);
+    if (stat(p, &sb) == 0) return;
+    SDL_Surface *s = SDL_CreateSurfaceFrom((int)w, (int)h, SDL_PIXELFORMAT_ABGR8888, (void *)rgba, (int)w * 4);
+    if (s) SDL_SavePNG(s, p), SDL_DestroySurface(s);
+}
+static VkImage hd_image_new(VmaAllocation *mem, VkFormat f, uint32_t w, uint32_t h, uint32_t levels, uint32_t layers) {
+    VkImageCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .imageType = VK_IMAGE_TYPE_2D, .format = f,
+                            .extent = {w, h, 1}, .mipLevels = levels, .arrayLayers = layers, .samples = VK_SAMPLE_COUNT_1_BIT,
+                            .tiling = VK_IMAGE_TILING_OPTIMAL,
+                            .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+    VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE};
+    VkImage img;
+    return vmaCreateImage(g_vk.vma, &ci, &ai, &img, mem, NULL) == VK_SUCCESS ? img : VK_NULL_HANDLE;
+}
+// New contents of t: each layer's replacement looked up (and with LARECOMP_TEX_DUMP, each layer written out).
+// (render thread, at the upload: ponytail - PNGs are read and layers decoded there, a hitch when a replaced texture
+// first loads; a loader thread if packs get big)
+static void hd_update(NvnTexture *t, TexBackend *b) {
+    hd_drop(b);
+    const char *dump = mods_texture_dump_dir();
+    if (!hd_eligible(b) || (!dump && !mods_texture_count())) return;
+    uint32_t layers = b->layers, nrep = 0, W = 0, H = 0;
+    uint64_t lsize = tegra_layer_size(&t->layout);
+    SDL_Surface **png = calloc(layers, sizeof *png);
+    for (uint32_t i = 0; i < layers; i++) {
+        uint64_t lh = tex_hash_full((const uint8_t *)(uintptr_t)t->addr + i * lsize, lsize);
+        if (dump) {
+            uint32_t w, h;
+            uint8_t *px = hd_decode_layer(t, b, i, &w, &h);
+            if (px) hd_dump(lh, px, w, h), free(px);
+        }
+        const char *p = mods_texture(lh);
+        if (!p) continue;
+        SDL_Surface *s0 = SDL_LoadPNG(p);
+        png[i] = s0 ? SDL_ConvertSurface(s0, SDL_PIXELFORMAT_ABGR8888) : NULL;
+        if (s0) SDL_DestroySurface(s0);
+        if (!png[i]) { LOG("[mods] %s: %s\n", p, SDL_GetError()); continue; }
+        nrep++;
+        if ((uint32_t)png[i]->w * (uint32_t)png[i]->h > W * H) W = (uint32_t)png[i]->w, H = (uint32_t)png[i]->h;
+    }
+    if (!nrep) { free(png); return; }
+    uint32_t levels = 1;
+    while ((W | H) >> levels) levels++;
+    VkFormat f = hd_srgb(b) ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+    b->hd_image = hd_image_new(&b->hd_mem, f, W, H, levels, layers);
+    VkCommandBuffer cb = vk_upload_cmd();
+    if (b->hd_image) vk_image_init_layout(cb, b->hd_image, VK_IMAGE_ASPECT_COLOR_BIT);
+    for (uint32_t i = 0; b->hd_image && i < layers; i++) {  // each layer through an image at its own size, scaled by a blit
+        uint32_t w, h;
+        uint8_t *px = png[i] ? NULL : hd_decode_layer(t, b, i, &w, &h);
+        if (png[i]) w = (uint32_t)png[i]->w, h = (uint32_t)png[i]->h;
+        else if (!px) continue;  // (no decoder: that layer stays black)
+        VmaAllocation tm;
+        VkImage tmp = hd_image_new(&tm, f, w, h, 1, 1);
+        if (tmp) {
+            vk_image_init_layout(cb, tmp, VK_IMAGE_ASPECT_COLOR_BIT);
+            VkSpan sp = vk_transient((uint64_t)w * h * 4, 16);
+            for (uint32_t y = 0; y < h; y++)
+                memcpy((uint8_t *)sp.ptr + (uint64_t)y * w * 4,
+                       png[i] ? (const uint8_t *)png[i]->pixels + (uint64_t)y * png[i]->pitch : px + (uint64_t)y * w * 4, w * 4);
+            VkBufferImageCopy rg = {.bufferOffset = sp.off, .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, .imageExtent = {w, h, 1}};
+            rec_CmdCopyBufferToImage(cb, sp.buf, tmp, VK_IMAGE_LAYOUT_GENERAL, 1, &rg);
+            vk_full_barrier(cb);
+            VkImageBlit bl = {.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, .srcOffsets = {{0, 0, 0}, {(int32_t)w, (int32_t)h, 1}},
+                              .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, i, 1}, .dstOffsets = {{0, 0, 0}, {(int32_t)W, (int32_t)H, 1}}};
+            rec_CmdBlitImage(cb, tmp, VK_IMAGE_LAYOUT_GENERAL, b->hd_image, VK_IMAGE_LAYOUT_GENERAL, 1, &bl, VK_FILTER_LINEAR);
+            defer((Dead){.img = tmp, .mem = tm});
+        }
+        free(px);
+    }
+    for (uint32_t lv = 1; b->hd_image && lv < levels; lv++) {
+        vk_full_barrier(cb);
+        int32_t sw_ = (int32_t)(W >> (lv - 1)), sh_ = (int32_t)(H >> (lv - 1)), dw = (int32_t)(W >> lv), dh = (int32_t)(H >> lv);
+        VkImageBlit bl = {.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, lv - 1, 0, layers},
+                          .srcOffsets = {{0, 0, 0}, {sw_ ? sw_ : 1, sh_ ? sh_ : 1, 1}},
+                          .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, lv, 0, layers}, .dstOffsets = {{0, 0, 0}, {dw ? dw : 1, dh ? dh : 1, 1}}};
+        rec_CmdBlitImage(cb, b->hd_image, VK_IMAGE_LAYOUT_GENERAL, b->hd_image, VK_IMAGE_LAYOUT_GENERAL, 1, &bl, VK_FILTER_LINEAR);
+    }
+    vk_full_barrier(cb);
+    for (uint32_t i = 0; i < layers; i++) if (png[i]) SDL_DestroySurface(png[i]);
+    free(png);
+    static int nlog;
+    if (b->hd_image && nlog++ < 50) LOG("[mods] texture %ux%u (%u layers): %u replaced, now %ux%u\n", b->width, b->height, layers, nrep, W, H);
+}
+
 static void destroy_image(TexBackend *b) {
+    hd_drop(b);
+    b->hd_hash = 0;
     if (b->image && b->mem) tex_count(b, -1);
     views_forget(b);
     if (b->image || b->mem) defer((Dead){.img = b->image, .mem = b->mem});  // (never the same allocation twice)
@@ -741,6 +879,7 @@ static void upload_texture(NvnTexture *t, TexBackend *b) {
     if (b->tp > 0) b->tp_gen = texpatch_generation();
     b->data_hash = h;
     b->uploaded = true;
+    if (b->hd_hash != h) hd_update(t, b), b->hd_hash = h;  // (new contents: their own replacement, if a mod has one)
     if (b->format != mf.vf && !b->astc_bw && !b->cpu_bc) return;  // unsupported format: nothing sensible to copy
     slow_note_upload(total);
     VkCommandBuffer cb = vk_upload_cmd();
@@ -1047,6 +1186,18 @@ VkImageView vk_view(NvnTexture *t, const NvnTextureView *v, bool has_view, bool 
     VkImageViewType want = view_type_for(want_textype);
     VkImageViewType have = b->base_type;
     if (b->samples > 1) return vk_dummy_view(want_textype);  // multisampled images can't be sampled as 2D
+    if (b->hd_image && want == have) {  // (a mod's HD texture: all its levels and layers, the game's swizzle)
+        if (!b->hd_view || memcmp(&b->hd_sw, &sw, sizeof sw)) {
+            if (b->hd_view) defer((Dead){.view = b->hd_view});
+            VkImageViewCreateInfo vi = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = b->hd_image, .viewType = have,
+                                        .format = hd_srgb(b) ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM, .components = sw,
+                                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}};
+            if (vkCreateImageView(g_vk.dev, &vi, NULL, &b->hd_view) != VK_SUCCESS) b->hd_view = VK_NULL_HANDLE;
+            b->hd_sw = sw;
+            vk_view_gen++;
+        }
+        if (b->hd_view) return b->hd_view;
+    }
     if (want == have) {
         if (have == VK_IMAGE_VIEW_TYPE_CUBE) nly = 6;
         return vk_image_view(b, want, fmt, lv0, nlv, ly0, nly, sw, aspect);

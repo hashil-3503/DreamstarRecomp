@@ -23,6 +23,7 @@
 #include "../platform.h"
 #include "../game_addresses.h"
 #include "../romfs_build.h"
+#include "../mods.h"
 #include "../ui/menu.h"
 
 #define FS_PATH_NOT_FOUND MAKE_RESULT(2, 1)
@@ -501,7 +502,8 @@ static void rom_index(void) {
             snprintf(host, sizeof host, "%s/romfs/%s", rando_seed_dir(), rom_files[i].path);
             sb.st_size = (off_t)(built ? built_size : later_size);
         } else {
-            if (!rando_romfs_override(rom_files[i].path, host, sizeof host)) continue;
+            // (a mod in loose files first: runtime/mods.c)
+            if (!mods_romfs_override(rom_files[i].path, host, sizeof host) && !rando_romfs_override(rom_files[i].path, host, sizeof host)) continue;
             if (stat(host, &sb)) continue;
         }
         if (!ov_meta) {
@@ -524,7 +526,7 @@ static void rom_index(void) {
         ov_n++;
         ov_end = (ov_end + size + 0xF) & ~0xFull;
     }
-    if (ov_n) LOG("[fs] randomizer: %d romfs files replaced\n", ov_n);
+    if (ov_n) LOG("[fs] %d romfs files replaced (mods, randomizer)\n", ov_n);
     if (ov_meta) { patches[npatches++] = (Patch){ov_meta_off, ov_meta_size, ov_meta}; }
     // The game's own files (before a seed's added files; the crash dialog checks them), their sizes summed (the files
     // that aren't the game's left out: issue #553), and the files that aren't the game's named. Copies of the game code at the root (game_romfs_exefs_copy) are left out.
