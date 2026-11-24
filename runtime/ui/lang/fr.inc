@@ -2191,3 +2191,5 @@
 {"No %s in that folder or the folders in it.", "Aucun %s dans ce dossier ni ses sous-dossiers."},
 {"Save imported. The previous save is in the backups.", "Sauvegarde importée. L'ancienne est dans les copies."},
 {"Some files could not be copied.", "Certains fichiers n'ont pas pu être copiés."},
+{"Reset the settings?", "Réinitialiser les réglages ?"},
+{"Video and sound settings go back to their defaults.\nYour controls stay as they are.", "Les réglages vidéo et son reviennent à leurs valeurs par défaut.\nTes commandes restent telles quelles."},

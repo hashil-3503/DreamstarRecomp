@@ -45,6 +45,7 @@ const char *touch_control_name(int i) {
     return i >= 0 && i < TOUCH_NCTL ? names[i] : "";
 }
 
+Settings g_settings_default;
 Settings g_settings = {
     .aspect = ASPECT_UNLOCKED,
     .hud_pos = PLAT_TOUCH ? HUD_EDGES : HUD_CENTERED,  // (phones and tablets: as before the setting, clear of the thumbs)
@@ -541,6 +542,7 @@ void settings_load(void) {
     static bool loaded;
     if (loaded) return;
     loaded = true;
+    g_settings_default = g_settings;
     parse_overrides();
     FILE *f = fopen(SETTINGS_FILE, "r");
     if (f) {

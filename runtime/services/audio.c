@@ -833,9 +833,14 @@ static void update_mix(Renderer *r, const uint8_t *p, int id) {
     memcpy(&m->dest_splitter, p + 0x928, 4);
     memcpy(m->vol, p + 0x24, sizeof m->vol);
     if (!m->buf) m->buf = calloc(MIXBUF_MAX * r->sample_count, sizeof(float));
-    static int nlog;  // (Kirby resends its mixes every update)
-    if (nlog >= 16) return;
-    nlog++;
+    // logged when a mix changes (Kirby resends its mixes every update, mostly the same)
+    static uint32_t last[64];
+    uint32_t h = 2166136261u;
+    for (const uint8_t *q = (const uint8_t *)m->vol; q < (const uint8_t *)m->vol + sizeof m->vol; q++) h = (h ^ *q) * 16777619u;
+    h ^= m->used * 31u + m->bufs * 131u + (uint32_t)m->dest * 7919u;
+    uint32_t v; memcpy(&v, &m->volume, 4); h ^= v;
+    if (id < 64 && last[id] == h) return;
+    if (id < 64) last[id] = h;
     LOG("[audren] mix %d used %u vol %.3f bufs %u dest %d:", id, m->used, m->volume, m->bufs, m->dest);
     for (int i = 0; i < MIXBUF_MAX * MIXBUF_MAX; i++)
         if (m->vol[i] != 0) LOG(" %d>%d=%.3f", i / MIXBUF_MAX, i % MIXBUF_MAX, m->vol[i]);

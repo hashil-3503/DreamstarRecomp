@@ -163,6 +163,7 @@ extern const char *const g_weathers[N_WEATHERS];  // (the menu's names: Off, Rai
 extern const char *const g_enemy_colour_modes[N_ENEMY_COLOUR_MODES];  // (the menu's names)
 
 extern Settings g_settings;
+extern Settings g_settings_default;  // (the values before larecomp.ini: Reset in the F1 menu)
 // The FPS target in effect: Dynamic resolution's own (user 2026-11-12) - with a resolution of the player's choosing
 // the frame pacer decides (pace.c), as at 60
 static inline int settings_fps_target(void) { return g_settings.dyn_res ? g_settings.fps_target : FPS_TARGET_60; }

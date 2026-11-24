@@ -1162,6 +1162,20 @@ static void notice_popup(float scale) {
 // (menu_reset_corner).
 static void reset_to_vanilla(bool in_game) {
     Settings &s = g_settings;
+    if (game_is_kirby()) {  // Kirby: video, sound and display back to their defaults (controls, language, folders kept)
+        const Settings &d = g_settings_default;
+        s.aspect = d.aspect, s.fullscreen = d.fullscreen, s.res_mode = d.res_mode, s.res_auto = d.res_auto;
+        s.dyn_res = d.dyn_res, s.dyn_min = d.dyn_min, s.upscaler = d.upscaler, s.upscaler_auto = d.upscaler_auto;
+        s.antialias = d.antialias, s.sharpen = d.sharpen, s.aniso = d.aniso, s.ao_quality = d.ao_quality;
+        s.shadow_quality = d.shadow_quality, s.fps_target = d.fps_target, s.fps_max = d.fps_max;
+        s.frame_interp = d.frame_interp, s.hdr = d.hdr, s.hdr_white = d.hdr_white, s.hdr_peak = d.hdr_peak;
+        s.show_fps = d.show_fps, s.fps_corner = d.fps_corner, s.fps_advanced = d.fps_advanced;
+        s.volume = d.volume, s.audio_out = d.audio_out, s.reverb = d.reverb, s.movie_audio = d.movie_audio;
+        s.menu_sounds = d.menu_sounds;
+        LOG("[menu] reset: Kirby's video and sound settings to their defaults\n");
+        settings_save();
+        return;
+    }
     s.aspect = ASPECT_ORIGINAL;
     s.cheat_hookshot = s.no_buff_drops = s.mirror_mode = false;
     s.walk_speed = 1.0f, s.walk_speed_dungeons = false;
@@ -1196,10 +1210,11 @@ static bool vanilla_popup(float scale, bool seed, bool in_game) {
     if (!ImGui::BeginPopupModal("##vanilla", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
         return false;
     ImGui::PushFont(g_font_big);
-    ImGui::TextColored(plastic_col(plastic_theme().title), "%s", L("Reset to vanilla?"));
+    ImGui::TextColored(plastic_col(plastic_theme().title), "%s", L(game_is_kirby() ? "Reset the settings?" : "Reset to vanilla?"));
     ImGui::PopFont();
     ImGui::Spacing();
-    ImGui::TextUnformatted(L("This resets your settings to the vanilla game experience.\nYour controls stay as they are."));
+    ImGui::TextUnformatted(L(game_is_kirby() ? "Video and sound settings go back to their defaults.\nYour controls stay as they are."
+                                             : "This resets your settings to the vanilla game experience.\nYour controls stay as they are."));
     if (seed) {
         ImGui::Spacing();
         ImGui::TextUnformatted(L("This also ends the current randomizer seed.\nIts save files are kept."));
