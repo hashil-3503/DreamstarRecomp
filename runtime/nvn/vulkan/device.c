@@ -1801,6 +1801,8 @@ static bool ip_hold(TexBackend *b, bool restore) {  // false: no copy (no memory
 // or dropped: 120 presents a second showed as jerky motion. Each waits until a period after the one before
 // (LARECOMP_INTERP_SPACING=0: not, research).
 static double ip_hz;            // (ip_mids: the refresh rate the in-betweens are made for; 0: none being made)
+extern bool game_is_kirby(void);
+static bool ip_skip_own;        // (ip_mids, Kirby: the frame's own image falls between two grid points - not shown)
 static double ip_rate;          // (stats: the refresh rate in use, learned or the display's - with in-betweens or not)
 static bool ip_restart;         // (Frame Generation was off: nothing learned or counted before counts)
 static bool ip_new_interval, ip_new_rate;  // (ip_mids, after a restart: the game's interval and the display's rate measured again)
@@ -1924,8 +1926,29 @@ static int ip_mids(TexBackend *b, uint64_t frame) {  // (the in-betweens shown)
     // which held it at 30)
     int mids = hz >= 100 ? (int)lround(hz / 60.0) - 1 : 0;
     if (mids > 3) mids = 3;
+    // Kirby: images on an even grid of the FPS target (90..240; Frame Generation alone: the display's rate), up to the
+    // display's. Whole in-betweens per frame (165 Hz: 2) put 180 images a second into 165 refreshes, and FIFO held the
+    // game at 55 fps. Grid points that fall inside the frame's interval are in-betweens at their own t; the frame's own
+    // image is shown only when a grid point falls on it (90: every other frame), ip_skip_own otherwise.
+    float ts[4];
+    for (int m = 0; m < 4; m++) ts[m] = (float)(m + 1) / (float)(mids + 1);
+    ip_skip_own = false;
+    if (game_is_kirby()) {
+        // (6% under the display's rate at most: on a 165 Hz display (RTX 5070 Ti, Windows 11) FIFO held the game at
+        // 58.5 fps with 165 images a second, 58.9 with 162, 59.7-60 with 155)
+        double rate = fmin(g_settings.fps_max > 60 ? g_settings.fps_max : hz, hz * 0.94), step = 60.0 / rate;
+        static double next = 1;  // (the next grid point, in game frames after the previous frame's)
+        if (next > 1 + step || next <= 0) next = 1;  // (a rate change)
+        mids = 0;
+        while (next < 1 - 1e-3 && mids < 3) ts[mids++] = (float)next, next += step;
+        bool own = fabs(next - 1) < 1e-3 || rate < 61;
+        if (own) next += step;
+        next -= 1;
+        ip_skip_own = !own && mids > 0;
+        hz = rate;
+    }
     ip_rate = hz;
-    if (mids < 1) { ip_not_made[IP_CAPPED] += hz_cap > 0; mids_last = 0; ip_hz = 0; return 0; }
+    if (mids < 1) { ip_not_made[IP_CAPPED] += hz_cap > 0; mids_last = 0; ip_hz = game_is_kirby() && hz > 61 ? hz : 0; return 0; }
     if (mids != mids_last) settle = slow_checks = 0;
     mids_last = mids;
     // The GPU's time goes to the game's frames first (as on Metal): in-betweens only in what a game frame leaves of its
@@ -1933,15 +1956,18 @@ static int ip_mids(TexBackend *b, uint64_t frame) {  // (the in-betweens shown)
     // Fewer than the refresh rate wants: evenly spaced, each shown longer.
     int allowed = interp_gpu_allowed(mids, interval_ns / 1e6);
     for (int m = allowed; m < mids; m++) interp_note_no_gpu();
-    if (allowed < 1) { ip_not_made[IP_NO_GPU]++; ip_hz = 0; return 0; }
-    ip_hz = hz * (allowed + 1) / (mids + 1);  // (presents spaced for the images made)
+    if (allowed < 1) { ip_not_made[IP_NO_GPU]++; ip_hz = 0; ip_skip_own = false; return 0; }
+    ip_hz = game_is_kirby() ? hz : hz * (allowed + 1) / (mids + 1);  // (presents spaced for the images made)
+    if (!game_is_kirby()) for (int m = 0; m < allowed; m++) ts[m] = (float)(m + 1) / (float)(allowed + 1);
+    bool skip = ip_skip_own;
+    ip_skip_own = false;  // (until all are made)
     if (!interp_replays_allowed(frame, total_frames, now)) { ip_not_made[IP_NOT_ALLOWED]++; return 0; }
     if (!interp_replay_lock()) { ip_not_made[IP_LOCKED]++; return 0; }
     int made = 0;
     if (ip_hold(b, false)) {
         extern void renderer_interp_replay(void);
         for (int m = 1; m <= allowed; m++) {
-            if (!interp_prepare((float)m / (float)(allowed + 1))) break;
+            if (!interp_prepare(ts[m - 1])) break;
             renderer_interp_replay();
             ip_present_mid(b);
             made++;
@@ -1950,6 +1976,7 @@ static int ip_mids(TexBackend *b, uint64_t frame) {  // (the in-betweens shown)
         if (!made) ip_not_made[IP_NOT_PREPARED]++;
     } else ip_not_made[IP_NO_HOLD]++;
     interp_replay_unlock();
+    ip_skip_own = skip && made == mids;
     return made;
 }
 
@@ -1989,7 +2016,14 @@ void backend_present_now(NvnTexture *t, uint64_t frame) {
     }
     static const float black[4] = {0, 0, 0, 1};
     uint64_t t0 = SDL_GetTicksNS();
-    bool have = vk_frame_begin(black);
+    {   // (a window shot's frame is always shown)
+        static long ws = -1;
+        if (ws < 0) ws = getenv("LARECOMP_WINDOW_SHOT") ? atol(getenv("LARECOMP_WINDOW_SHOT")) : 0;
+        if (ws && (long)frame + 1 == ws) ip_skip_own = false;
+    }
+    bool skip_own = ip_skip_own;
+    ip_skip_own = false;
+    bool have = !skip_own && vk_frame_begin(black);
     pp_mark(PP_ACQUIRE);
     uint64_t nd = SDL_GetTicksNS() - t0;
     if (nd > 30000000) {

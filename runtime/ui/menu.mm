@@ -799,10 +799,15 @@ static void tab_display(void) {
         int fi = 2;
         for (int i = 0; i < 3; i++) if (fps_target[i] == g_settings.fps_target) fi = i;
         if (game_is_kirby()) {  // (Kirby: the game's own frame rate, pace.c kirby_fps - 30 is the original's in 3D)
-            static const char *kfps[] = {LN("30"), LN("60")};
+            // above 60: Frame Generation's images a second (interp.c interp_wanted, vulkan/device.c ip_mids)
+            static const char *kfps[] = {LN("30"), LN("60"), LN("90"), LN("120"), LN("144"), LN("165"), LN("240")};
+            static const int krate[] = {30, 60, 90, 120, 144, 165, 240};
             int ki = g_settings.fps_target == FPS_TARGET_30 ? 0 : 1;
-            if (opt_choice("FPS target", &ki, kfps, 2, 1, "The game's frame rate. 30 is the original's."))
-                g_settings.fps_target = ki ? FPS_TARGET_60 : FPS_TARGET_30;
+            for (int i = 2; i < 7; i++) if (g_settings.fps_max == krate[i]) ki = i;
+            if (opt_choice("FPS target", &ki, kfps, 7, 1,
+                           "The game's frame rate. 30 is the original's. Above 60, extra images are drawn between the "
+                           "game's frames, up to your display's refresh rate. Some visual glitches are possible."))
+                g_settings.fps_target = ki ? FPS_TARGET_60 : FPS_TARGET_30, g_settings.fps_max = ki >= 2 ? krate[ki] : 0;
         } else {
         if (!dyn) opt_disable_next(), opt_needs_next("Dynamic resolution");
         if (opt_choice("FPS target", &fi, fps, 3, 2,

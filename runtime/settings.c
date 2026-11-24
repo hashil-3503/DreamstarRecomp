@@ -282,6 +282,7 @@ static bool settings_apply(const char *key, const char *val) {
         int m = atoi(val);  // (anything else, the old 25 / 50 / 75%: 540)
         g_settings.dyn_min = m == 360 || m == 720 ? m : 540;
     }
+    else if (!strcmp(key, "fps_max")) { int v = atoi(val); g_settings.fps_max = v > 60 && v <= 1000 ? v : 0; }
     else if (!strcmp(key, "fps_target")) g_settings.fps_target = !strcmp(val, "30") ? FPS_TARGET_30 : !strcmp(val, "mixed") ? FPS_TARGET_MIXED : FPS_TARGET_60;
     else if (!strcmp(key, "ambient_occlusion")) g_settings.ao_quality = !strcmp(val, "high") ? AO_HIGH : !strcmp(val, "off") ? AO_OFF : AO_SWITCH;
     else if (!strcmp(key, "inv_keys")) g_settings.inv_keys = atoi(val) != 0;
@@ -607,6 +608,7 @@ static void write_settings(FILE *f) {
     fprintf(f, "resolution = %s\n", g_settings.res_auto ? "auto" : res_name(g_settings.res_mode));
     fprintf(f, "dynamic_resolution = %d\n", g_settings.dyn_res);
     fprintf(f, "dynamic_min = %d\n", g_settings.dyn_min);
+    fprintf(f, "fps_max = %d\n", g_settings.fps_max);
     fprintf(f, "fps_target = %s\n", g_settings.fps_target == FPS_TARGET_30 ? "30" : g_settings.fps_target == FPS_TARGET_MIXED ? "mixed" : "60");
     fprintf(f, "inv_keys = %d\n", g_settings.inv_keys);
     fprintf(f, "dpad_mode = %s\n", g_settings.dpad_mode == DPAD_ITEMS ? "items" : g_settings.dpad_mode == DPAD_MOVE ? "move" : "nothing");

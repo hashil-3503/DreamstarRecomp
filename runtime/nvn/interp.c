@@ -61,7 +61,8 @@ int interp_wanted(void) {
         if (env >= 0) LOG("[interp] LARECOMP_INTERP=%s\n", e);
     }
     if (env >= 0) return env;
-    return g_settings.frame_interp ? INTERP_ON : INTERP_OFF;
+    extern bool game_is_kirby(void);  // (Kirby: an FPS target above 60 is made with Frame Generation)
+    return g_settings.frame_interp || (game_is_kirby() && g_settings.fps_max > 60) ? INTERP_ON : INTERP_OFF;
 }
 
 typedef struct {

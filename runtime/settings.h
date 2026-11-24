@@ -62,6 +62,8 @@ typedef struct {
     int hdr_white;       // HDR: the SDR image's white, in nits (paper white)
     int hdr_peak;        // HDR: its brightest highlights, in nits (= hdr_white: no highlight expansion)
     bool frame_interp;   // Frame Generation: extra images between the game's frames (runtime/nvn/interp.c)
+    int fps_max;         // Kirby's FPS target above 60 (90..240): Frame Generation's images a second, up to the display's
+                         // refresh rate (vulkan/device.c ip_mids); 0: 60 or less, the game's own frames only
     bool metal_hud;      // macOS: Apple's Metal Performance HUD over the game (runtime/nvn/metal.m metal_hud_apply)
     int show_fps;        // FPS_*: the frame rate counter's corner (FPS_OFF: none)
     int fps_corner;      // FPS_* (not off): the corner Show FPS goes back to when turned on (the menu's Position row)
