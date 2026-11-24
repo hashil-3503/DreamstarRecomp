@@ -1207,6 +1207,8 @@ static Service *open_host_fs(const char *sub) {
             }
         }
         if (d) closedir(d);
+        extern void save_backup_on_mount(const char *sub);  // services/save_backup.c
+        save_backup_on_mount(sub);
     }
     for (int i = 0; fs->journaled && i < LIVE_MOUNTS_MAX; i++)
         if (!g_live_mounts[i]) { g_live_mounts[i] = fs, fs->live = true; break; }

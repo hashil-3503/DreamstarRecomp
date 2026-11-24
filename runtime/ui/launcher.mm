@@ -2443,6 +2443,52 @@ static void SDLCALL kirby_picked(void *, const char *const *files, int) {
     pthread_mutex_unlock(&g_lock);
 }
 extern "C" const char *launcher_root(void) { return g_root.c_str(); }  // (the folder PLAY boots: runtime/main.c)
+// Saves: backups made at each launch, and a save made on a Switch by a save manager (runtime/services/save_backup.c)
+extern "C" int save_backup_list(char (*names)[32], int max);
+extern "C" bool save_backup_restore(const char *name, char *msg, size_t n);
+extern "C" bool save_import(const char *dir, const char *want, char *msg, size_t n);
+static std::string g_kirby_import;  // (the folder dialog's pick, from its thread)
+static void SDLCALL kirby_import_picked(void *, const char *const *files, int) {
+    if (!files || !files[0]) return;
+    pthread_mutex_lock(&g_lock);
+    g_kirby_import = files[0];
+    pthread_mutex_unlock(&g_lock);
+}
+static void kirby_saves(float x0) {
+    static char msg[300];
+    static char names[16][32];
+    static int n = -1, sel;
+    pthread_mutex_lock(&g_lock);
+    std::string imp = g_kirby_import;
+    g_kirby_import.clear();
+    pthread_mutex_unlock(&g_lock);
+    if (!imp.empty()) save_import(imp.c_str(), "savedata.dat", msg, sizeof msg), n = -1;
+    if (n < 0) n = save_backup_list(names, 16), sel = 0;
+    static bool tested;  // (tests: LARECOMP_SAVE_IMPORT_TEST=<folder>, LARECOMP_SAVE_RESTORE_TEST=<n> - the nth newest backup)
+    if (!tested) {
+        tested = true;
+        if (getenv("LARECOMP_SAVE_IMPORT_TEST")) save_import(getenv("LARECOMP_SAVE_IMPORT_TEST"), "savedata.dat", msg, sizeof msg);
+        int r = getenv("LARECOMP_SAVE_RESTORE_TEST") ? atoi(getenv("LARECOMP_SAVE_RESTORE_TEST")) : -1;
+        if (r >= 0 && r < n) save_backup_restore(names[r], msg, sizeof msg);
+        if (msg[0]) fprintf(stderr, "[save] start screen: %s\n", msg), n = save_backup_list(names, 16);
+    }
+    ImGui::SetCursorPosX(x0);
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "Saves");
+    ImGui::SetCursorPosX(x0);
+    if (ImGui::Button("Import Switch save..."))
+        SDL_ShowOpenFolderDialog(kirby_import_picked, NULL, g_launcher_win, NULL, false);
+    if (n > 0) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("0000-00-00_00-00-00-0").x + ImGui::GetFrameHeight() * 2);
+        ImGui::Combo("##backup", &sel, [](void *d, int i) { return (const char *)((char (*)[32])d)[i]; }, names, n);
+        ImGui::SameLine();
+        if (ImGui::Button("Restore backup")) save_backup_restore(names[sel], msg, sizeof msg), n = -1;
+    }
+    if (msg[0]) {
+        ImGui::SetCursorPosX(x0);
+        ImGui::TextColored(ImVec4(1, 0.95f, 0.7f, 1), "%s", msg);
+    }
+}
 static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play) {
     ImDrawList *bg = ImGui::GetBackgroundDrawList();
     bg->AddRectFilledMultiColor(ImVec2(0, 0), ds, IM_COL32(255, 150, 190, 255), IM_COL32(255, 196, 120, 255),
@@ -2468,10 +2514,13 @@ static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play
         ImGui::SetCursorPosX(x0);
         ImGui::TextColored(ImVec4(1, 0.85f, 0.5f, 1), "!  %s", status.c_str());
     }
+    ImGui::Dummy(ImVec2(0, 24 * s));
+    kirby_saves(x0);
+    float below = ImGui::GetCursorPosY() + 30 * s;  // (a small window: Play under the saves' message, not on it)
     ImGui::PopFont();
 
     ImGui::PushFont(g_font_menu);
-    ImGui::SetCursorPos(ImVec2(x0, ds.y - 230 * s));
+    ImGui::SetCursorPos(ImVec2(x0, fmaxf(ds.y - 230 * s, below)));
     static bool focused;
     if (!focused && status.empty()) { ImGui::SetKeyboardFocusHere(); focused = true; }
     ImGui::BeginDisabled(!status.empty());

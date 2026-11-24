@@ -4,6 +4,13 @@ The layout of one save slot, mapped on game version 1.0.0. As far as we know 1.0
 (1.0.1 changed one function in the save loader, not the format). Code addresses are v1.0.0 offsets in the `main` module (`main+0x...`). For other versions, look them up in `runtime/game_addresses/`. Our
 reading and writing of saves is in `runtime/services/fs.c` and is covered by `tools/test_save.py`.
 
+Backups and imports (`runtime/services/save_backup.c`, Kirby's start screen): the first mount of each save folder in
+a run copies its committed files to `<save>/backups/<date>/<mount>/` (the newest 10 are kept; `LARECOMP_NO_SAVE_BACKUP=1`
+turns it off). "Restore backup" copies one back, "Import Switch save..." copies a save manager's backup folder (JKSV,
+Checkpoint: the folder with the save's files, or the title's folder - its newest backup) into `save_0`; both back up
+the current save first. Zipped backups must be unzipped first. Tests: `LARECOMP_SAVE_IMPORT_TEST=<folder>`,
+`LARECOMP_SAVE_RESTORE_TEST=<n>` (the nth newest backup), with `LARECOMP_LAUNCHER_SHOT`.
+
 How sure each entry is:
 
 - **[V]**: confirmed in the game's code and in real save files
