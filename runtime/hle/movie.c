@@ -622,7 +622,9 @@ static void dec_acquire_input(Cpu *c) {
     pthread_mutex_lock(&d->lock);
     int out_free = 0;
     for (int i = 0; i < NOUT; i++) if (!d->out_busy[i]) out_free++;
-    if (out_free < 2 || d->npending) { pthread_mutex_unlock(&d->lock); c->x[0] = 1; return; }  // backpressure
+    // (a stopped decoder hands out nothing: Kirby's input thread feeds the extractor it gets through a player that a
+    //  skipped movie already freed - null object + 0x240, now and then on skipping the opening)
+    if (d->stopped || out_free < 2 || d->npending) { pthread_mutex_unlock(&d->lock); c->x[0] = 1; return; }  // backpressure
     int idx = -1, free_n = 0;
     for (int i = 0; i < NIN; i++)
         if (!d->in_busy[i]) { if (idx < 0) idx = i; else free_n++; }
@@ -799,7 +801,7 @@ static void dec_acquire_output(Cpu *c) {
     Decoder *d = self_state(c);
     n_acq_out++;
     pthread_mutex_lock(&d->lock);
-    if (!d->nready) { pthread_mutex_unlock(&d->lock); c->x[0] = 1; return; }
+    if (!d->nready || d->stopped) { pthread_mutex_unlock(&d->lock); c->x[0] = 1; return; }
     OutReady r = d->ready[0];
     memmove(d->ready, d->ready + 1, --d->nready * sizeof *d->ready);
     int remaining = d->nready;
