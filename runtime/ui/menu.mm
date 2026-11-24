@@ -860,6 +860,21 @@ static void tab_display(void) {
     preview_text(LN("Configure the smoothing of jagged edges. SMAA keeps textures sharp."), NULL);
     opt_preview("Anti-aliasing", &g_settings.antialias, aa, 2, AA_OFF,
                "Smooths jagged edges. SMAA keeps textures sharp and helps most at a lower internal resolution.");
+#ifndef __APPLE__
+    {   // Vulkan only (vulkan/exec.c post_process, textures.c vk_sampler)
+        static const char *sh[] = {LN("Off"), LN("Low"), LN("Medium"), LN("High")};
+        opt_choice("Sharpening", &g_settings.sharpen, sh, 4, 0,
+                   "Sharpens the picture (AMD FidelityFX CAS-style RCAS). Off still sharpens a little when AMD FSR 1 "
+                   "scales the picture up.");
+        static const char *af[] = {LN("Game default"), LN("2x"), LN("4x"), LN("8x"), LN("16x")};
+        static const int afv[] = {0, 2, 4, 8, 16};
+        int ai = 0;
+        for (int i = 0; i < 5; i++) if (afv[i] == g_settings.aniso) ai = i;
+        if (opt_choice("Anisotropic filtering", &ai, af, 5, 0,
+                       "Keeps textures sharp on surfaces seen at a slant, like the ground in the distance."))
+            g_settings.aniso = afv[ai];
+    }
+#endif
     static const char *ao[] = {LN("Default"), LN("High"), LN("Off")};
     preview_text(LN("Configure the soft shadows where objects meet the ground and walls."), NULL);
     opt_preview("Ambient occlusion", &g_settings.ao_quality, ao, 3, AO_SWITCH,

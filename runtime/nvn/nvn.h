@@ -41,6 +41,7 @@ typedef struct {
     float lod_min, lod_max, lod_bias, max_aniso;
     float border[4];
     void *backend;
+    int backend_aniso;  // (Vulkan: the Anisotropic filtering setting the backend sampler was made with)
 } NvnSamplerDesc;
 
 typedef struct {

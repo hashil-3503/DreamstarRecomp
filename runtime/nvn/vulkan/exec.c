@@ -8447,8 +8447,11 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, float fx, flo
     *upscaled = fsr;
     static int rcas_pass = -1;
     if (rcas_pass < 0) rcas_pass = getenv("LARECOMP_VK_RCAS_PASS") && atoi(getenv("LARECOMP_VK_RCAS_PASS"));
-    *rcas_done = !(fsr && rcas_present && !rcas_pass);
-    if (!smaa && !fsr) return v;
+    // Sharpening (Video tab): its own strength, in a pass of its own (also without an upscale: on the game image)
+    static const float sharp_stops[4] = {0.2f, 1.0f, 0.5f, 0.0f};
+    int sharpen = g_settings.sharpen > 0 && g_settings.sharpen < 4 ? g_settings.sharpen : 0;
+    *rcas_done = !(fsr && rcas_present && !rcas_pass && !sharpen);
+    if (!smaa && !fsr && !sharpen) return v;
     extern void vk_frame_suspend(void);
     extern void vk_frame_resume(void);
     vk_frame_suspend();
@@ -8480,9 +8483,16 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, float fx, flo
         post_pass(cb, "easu.frag", ei, 1, e, pe, false);
         v = post_view(e);
     }
+    if (sharpen && !fsr) {  // (the game image at its size: before the present scales it)
+        TexBackend *r = post_image(4, b->width, b->height);
+        float pr[8] = {exp2f(-sharp_stops[sharpen]), 0, 0, 0, (float)b->width, (float)b->height};
+        VkImageView ri_[3] = {v};
+        post_pass(cb, "rcas.frag", ri_, 1, r, pr, false);
+        v = post_view(r);
+    }
     if (fsr && *rcas_done) {
         TexBackend *r = post_image(4, ow, oh);
-        float pr[8] = {exp2f(-0.2f), 0, 0, 0, (float)ow, (float)oh};  // (sharpness 0.2 stops: AMD's default)
+        float pr[8] = {exp2f(-sharp_stops[sharpen]), 0, 0, 0, (float)ow, (float)oh};  // (sharpness 0.2 stops: AMD's default)
         VkImageView ri_[3] = {v};
         post_pass(cb, "rcas.frag", ri_, 1, r, pr, false);
         v = post_view(r);
@@ -8492,9 +8502,10 @@ static VkImageView post_process(VkCommandBuffer cb, TexBackend *b, float fx, flo
     {
         static uint32_t piw, pih, pow_, poh;
         static int psm = -1, pfs = -1;
-        if (b->width != piw || b->height != pih || ow != pow_ || oh != poh || smaa != psm || fsr != pfs)
-            LOG("[post] %ux%u%s%s -> %ux%u\n", b->width, b->height, smaa ? " smaa" : "", fsr ? " fsr1" : "", ow, oh);
-        piw = b->width; pih = b->height; pow_ = ow; poh = oh; psm = smaa; pfs = fsr;
+        static int psh = -1;
+        if (b->width != piw || b->height != pih || ow != pow_ || oh != poh || smaa != psm || fsr != pfs || sharpen != psh)
+            LOG("[post] %ux%u%s%s sharpen %d -> %ux%u\n", b->width, b->height, smaa ? " smaa" : "", fsr ? " fsr1" : "", sharpen, ow, oh);
+        piw = b->width; pih = b->height; pow_ = ow; poh = oh; psm = smaa; pfs = fsr; psh = sharpen;
     }
     return v;
 }

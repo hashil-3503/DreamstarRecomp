@@ -17,6 +17,7 @@
 #include "../renderer.h"
 #include "../texpatch.h"
 #include "../output_scale.h"
+#include "../../settings.h"
 
 // ================================================================== formats
 typedef struct { VkFormat vf; uint8_t expand_rgb, alpha_one; } VkFmt;
@@ -1210,7 +1211,10 @@ static VkCompareOp compare_op(uint32_t f) {
 }
 
 VkSampler vk_sampler(NvnSamplerDesc *d) {
-    if (d->backend) return (VkSampler)d->backend;
+    // (a new Anisotropic filtering setting: a new sampler; the old one stays - draws in flight may still use it.
+    // ponytail: leaks the game's samplers once per change of the setting, a deferred destroy if that ever matters)
+    if (d->backend && d->backend_aniso == g_settings.aniso) return (VkSampler)d->backend;
+    d->backend_aniso = g_settings.aniso;
     VkSamplerCreateInfo si = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     si.magFilter = d->mag_filter == 1 ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
     uint32_t mf = d->min_filter;
@@ -1235,6 +1239,9 @@ VkSampler vk_sampler(NvnSamplerDesc *d) {
     if (si.maxLod < si.minLod) si.maxLod = si.minLod;
     si.mipLodBias = d->lod_bias;
     if (d->max_aniso > 1) { si.anisotropyEnable = VK_TRUE; si.maxAnisotropy = fminf(d->max_aniso, 16); }
+    // Video tab "Anisotropic filtering": linear, mipmapped textures (floors seen at a slant stay sharp)
+    if (g_settings.aniso > 1 && (mf == 3 || mf == 5) && g_settings.aniso > si.maxAnisotropy)
+        si.anisotropyEnable = VK_TRUE, si.maxAnisotropy = (float)g_settings.aniso;
     static float lodmin = -1;
     if (lodmin < 0) lodmin = getenv("LARECOMP_LOD_MIN") ? (float)atof(getenv("LARECOMP_LOD_MIN")) : 0;
     if (lodmin > 0 && mf > 1) si.minLod = fmaxf(si.minLod, lodmin);

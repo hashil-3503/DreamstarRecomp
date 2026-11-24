@@ -282,6 +282,8 @@ static bool settings_apply(const char *key, const char *val) {
         int m = atoi(val);  // (anything else, the old 25 / 50 / 75%: 540)
         g_settings.dyn_min = m == 360 || m == 720 ? m : 540;
     }
+    else if (!strcmp(key, "sharpen")) { int v = atoi(val); g_settings.sharpen = v < 0 ? 0 : v > 3 ? 3 : v; }
+    else if (!strcmp(key, "anisotropic")) { int v = atoi(val); g_settings.aniso = v == 2 || v == 4 || v == 8 || v == 16 ? v : 0; }
     else if (!strcmp(key, "fps_max")) { int v = atoi(val); g_settings.fps_max = v > 60 && v <= 1000 ? v : 0; }
     else if (!strcmp(key, "fps_target")) g_settings.fps_target = !strcmp(val, "30") ? FPS_TARGET_30 : !strcmp(val, "mixed") ? FPS_TARGET_MIXED : FPS_TARGET_60;
     else if (!strcmp(key, "ambient_occlusion")) g_settings.ao_quality = !strcmp(val, "high") ? AO_HIGH : !strcmp(val, "off") ? AO_OFF : AO_SWITCH;
@@ -609,6 +611,8 @@ static void write_settings(FILE *f) {
     fprintf(f, "dynamic_resolution = %d\n", g_settings.dyn_res);
     fprintf(f, "dynamic_min = %d\n", g_settings.dyn_min);
     fprintf(f, "fps_max = %d\n", g_settings.fps_max);
+    fprintf(f, "sharpen = %d\n", g_settings.sharpen);
+    fprintf(f, "anisotropic = %d\n", g_settings.aniso);
     fprintf(f, "fps_target = %s\n", g_settings.fps_target == FPS_TARGET_30 ? "30" : g_settings.fps_target == FPS_TARGET_MIXED ? "mixed" : "60");
     fprintf(f, "inv_keys = %d\n", g_settings.inv_keys);
     fprintf(f, "dpad_mode = %s\n", g_settings.dpad_mode == DPAD_ITEMS ? "items" : g_settings.dpad_mode == DPAD_MOVE ? "move" : "nothing");

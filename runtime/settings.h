@@ -48,6 +48,9 @@ typedef struct {
     int upscaler;        // UPSCALE_*: how a lower internal resolution reaches the window (MetalFX: macOS, FSR 1: Windows)
     bool upscaler_auto;  // never chosen: the default for this GPU (settings_resolve_defaults); saved as "auto"
     int antialias;       // AA_*: anti-aliasing of the game image before it is scaled to the window
+    int sharpen;         // 0 off, 1 low, 2 medium, 3 high: FSR 1's RCAS on the game image (vulkan/exec.c post_process;
+                         // off: FSR 1 keeps its own 0.2 stops when it upscales)
+    int aniso;           // anisotropic filtering forced on mipmapped textures: 0 = the game's own, else 2 / 4 / 8 / 16
     int ao_quality;      // AO_*: the resolution of the game's ambient occlusion
     int shadow_quality;  // SHADOW_*: the resolution of the game's shadow map
     int fps_target;      // FPS_TARGET_*: the game's 30 or 60 fps mode, or 30 outdoors (the Field) and 60 indoors
