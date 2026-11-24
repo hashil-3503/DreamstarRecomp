@@ -1,4 +1,10 @@
-# Dreamstar Recomp
+<p align="center"><img src="docs/images/banner.png" alt="Dreamstar Recomp" width="900"></p>
+
+<p align="center">
+  <a href="https://github.com/pixelnorth/DreamstarRecomp/releases/latest"><b>Download</b></a> ·
+  <a href="#play">How to play</a> ·
+  <a href="#features">Features</a>
+</p>
 
 > [!IMPORTANT]
 > **This project was made almost entirely with AI** (Anthropic's Claude, through Claude Code), directed and tested by a
@@ -10,6 +16,17 @@ Windows application with a Vulkan renderer. It is a fork of [LAS Recomp](https:/
 **No game code and no game files are included.** You need your own copy of the game, already extracted: the folder
 with `exefs` and `romfs` in it. On the first launch, Dreamstar builds the game code on your PC from your own files
 (a few minutes, once).
+
+<table>
+  <tr>
+    <td><img src="docs/images/stage.jpg" alt="A stage at 60 fps"></td>
+    <td><img src="docs/images/map.jpg" alt="The world map"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/minigame.jpg" alt="A four-player minigame"></td>
+    <td><img src="docs/images/launcher.jpg" alt="The start screen"></td>
+  </tr>
+</table>
 
 ## Features
 
