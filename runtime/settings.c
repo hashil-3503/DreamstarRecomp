@@ -280,7 +280,7 @@ static bool settings_apply(const char *key, const char *val) {
     else if (!strcmp(key, "dynamic_resolution")) g_settings.dyn_res = atoi(val) != 0;
     else if (!strcmp(key, "dynamic_min")) {
         int m = atoi(val);  // (anything else, the old 25 / 50 / 75%: 540)
-        g_settings.dyn_min = m == 360 || m == 720 ? m : 540;
+        g_settings.dyn_min = m == 360 || m == 720 || m == 1080 || m == 1440 || m == 2160 ? m : 540;
     }
     else if (!strcmp(key, "sharpen")) { int v = atoi(val); g_settings.sharpen = v < 0 ? 0 : v > 3 ? 3 : v; }
     else if (!strcmp(key, "anisotropic")) { int v = atoi(val); g_settings.aniso = v == 2 || v == 4 || v == 8 || v == 16 ? v : 0; }

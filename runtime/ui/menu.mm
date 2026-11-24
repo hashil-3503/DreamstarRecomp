@@ -817,12 +817,12 @@ static void tab_display(void) {
         }
     }
     {  // Dynamic's floor (output_scale.c dyn_set_floor)
-        static const char *mins[] = {LN("360p"), LN("540p"), LN("720p")};
-        static const int min_lines[] = {360, 540, 720};
+        static const char *mins[] = {LN("360p"), LN("540p"), LN("720p"), LN("1080p"), LN("1440p"), LN("4K")};
+        static const int min_lines[] = {360, 540, 720, 1080, 1440, 2160};  // (above the display's lines: its own)
         int mi = 1;
-        for (int i = 0; i < 3; i++) if (min_lines[i] == g_settings.dyn_min) mi = i;
+        for (int i = 0; i < 6; i++) if (min_lines[i] == g_settings.dyn_min) mi = i;
         if (!dyn) opt_disable_next(), opt_needs_next("Dynamic resolution");
-        if (opt_choice("Minimum resolution", &mi, mins, 3, 1,
+        if (opt_choice("Minimum resolution", &mi, mins, 6, 1,
                        "How low Dynamic can go. Lower keeps the frame rate up in busy scenes but looks softer."))
             g_settings.dyn_min = min_lines[mi];
     }

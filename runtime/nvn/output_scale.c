@@ -346,7 +346,7 @@ static double dyn_step_down(double G, double W) {
 // or fewer)
 static void dyn_set_floor(double lines) {
     int m = g_settings.dyn_min;
-    double f = fmin(1.0, (m == 360 || m == 720 ? m : 540) / fmax(lines, 1));
+    double f = fmin(1.0, (m == 360 || m == 720 || m == 1080 || m == 1440 || m == 2160 ? m : 540) / fmax(lines, 1));
     if (fabs(f - g_dyn_floor) < 1e-9) return;
     g_dyn_floor = f;
     if (g_dyn < f) g_dyn = f;
