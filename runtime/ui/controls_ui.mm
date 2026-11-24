@@ -22,6 +22,7 @@ extern "C" {
 #include "../platform.h"
 #include "../input_bind.h"
 #include "../settings.h"
+#include "../game_addresses.h"
 int input_pad_family(void);              // runtime/hle/input.c
 SDL_JoystickID input_active_pad(void);   // runtime/hle/input.c: the controller the game reads (0: none yet)
 #if PLAT_TOUCH
@@ -379,6 +380,7 @@ extern "C" void controls_tab_draw(float scale) {
     }
     take_focus(FOCUS_CONFIGURE);
 
+    if (!game_is_kirby()) {  // (Link's movement and items: Kirby's d-pad always moves)
     opt_section("Movement");
     {
         static const char *const modes[] = {LN("Nothing"), LN("Items"), LN("Movement")};
@@ -391,6 +393,7 @@ extern "C" void controls_tab_draw(float scale) {
     opt_toggle("Hookshot aims in 8 directions", &g_settings.hookshot_8way, false,
                "The hookshot fires straight along the nearest of 8 directions, even with 360-degree movement.");
     opt_child_end();
+    }
 
     opt_section("Controller");
     opt_toggle("Rumble", &g_settings.rumble, true, "Controller vibration.");

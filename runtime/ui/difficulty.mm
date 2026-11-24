@@ -57,6 +57,7 @@ extern "C" void input_apply_background(void);  // hle/input.c
 
 extern "C" void general_draw(float scale) {
     opt_begin("##general", scale);
+    bool z = !game_is_kirby();  // (Kirby: the rows below that act on Zelda only are left out)
     opt_section("General");
     {
         // what the game is told the console's language is: its text follows this (runtime/settings.c), and the menus
@@ -76,10 +77,10 @@ extern "C" void general_draw(float scale) {
                                   : "The language of the menus and the game's text. The game's text changes after a restart."))
             settings_save();
     }
-    if (opt_choice("Text speed", &g_settings.text_speed, g_text_speeds, N_TEXT_SPEEDS, TEXT_SPEED_NORMAL,
+    if (z && opt_choice("Text speed", &g_settings.text_speed, g_text_speeds, N_TEXT_SPEEDS, TEXT_SPEED_NORMAL,
                    "How fast message text appears. Each message still waits for your button press."))
         settings_save();
-    {   // (from Video, user 2026-11-12, after Text speed: a live preview, as an Off / On choice)
+    if (z) {   // (from Video, user 2026-11-12, after Text speed: a live preview, as an Off / On choice)
         static const char *const oo[] = {LN("Off"), LN("On")};
         int rb = g_settings.blur_removal;
         if (opt_preview("Remove tilt-shift blur", &rb, oo, 2, 0,
@@ -95,18 +96,19 @@ extern "C" void general_draw(float scale) {
                                   "Controllers keep working while another window is in front. macOS may ask for Input "
                                   "Monitoring permission."))
         input_apply_background(), settings_save();
-    {   // (issue #817: ultrawide monitors; phones and tablets had it at the edges always, now their default)
+    if (z) {   // (issue #817: ultrawide monitors; phones and tablets had it at the edges always, now their default)
         static const char *const pos[] = {LN("Centered"), LN("At edges")};
         if (g_settings.aspect != ASPECT_UNLOCKED) opt_disable_next(), opt_needs_next("Aspect ratio", "Unlocked");
         if (opt_choice("HUD", &g_settings.hud_pos, pos, 2, PLAT_TOUCH ? HUD_EDGES : HUD_CENTERED,
                        "Where the hearts, items and rupees sit when the screen isn't 16:9."))
             settings_save();
     }
-    if (opt_toggle("Hide Hero Mode icon", &g_settings.hide_hero_icon, false,
+    if (z && opt_toggle("Hide Hero Mode icon", &g_settings.hide_hero_icon, false,
                    "Hides the Hero Mode emblem in the corner of the screen while playing a Hero Mode file."))
         settings_save();
 
-    // run timer / LiveSplit (runtime/hle/run_timer.c, runtime/livesplit.c, runtime/ui/race_overlay.mm)
+    // run timer / LiveSplit (runtime/hle/run_timer.c, runtime/livesplit.c, runtime/ui/race_overlay.mm): Zelda's splits
+    if (z) {
     opt_section("Speedrun");
     // (set before a save is loaded: free on the start screen, the title and the file select; locked while a file is
     // in play - game_in_play: Link exists in a level - and free again back at the title)
@@ -142,6 +144,7 @@ extern "C" void general_draw(float scale) {
             settings_save();
         }
         opt_child_end();
+    }
     }
     opt_end();
 }

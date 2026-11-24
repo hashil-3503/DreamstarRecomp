@@ -1011,7 +1011,7 @@ static void tab_audio(void) {
                "Stereo for speakers and headphones. 5.1 sends the game's surround mix to a 5.1 system.");
     opt_toggle("Movie audio", &g_settings.movie_audio, true,
                "Sound in the opening and ending movies. Changes the next time a movie plays.");
-    opt_toggle("Power-up music", &g_settings.powerup_music, true,
+    if (!game_is_kirby()) opt_toggle("Power-up music", &g_settings.powerup_music, true,
                "Guardian Acorn and Piece of Power music. Off: keep the area's music. Both items still work.");
     opt_section("Effects");
     opt_toggle("Enable reverb", &g_settings.reverb, true,
@@ -1524,7 +1524,7 @@ static void tabs_body(float scale, bool in_game, void (*prelaunch)(float), int o
     int keep_tab = g_tab;  // (one page alone: the Settings window's tab stays as it was)
     if (only != -1000) tabs[ntabs++] = {names[only], only, true}, g_tab = only;
     else
-        for (int i : order) tabs[ntabs++] = {names[i], i, in_game || i != 5};
+        for (int i : order) if (!game_is_kirby() || i != 6) /* (Kirby: no Gameplay - its levers are Zelda's) */ tabs[ntabs++] = {names[i], i, in_game || i != 5};
     int cur = 0;  // g_tab / g_tab_request hold ids
     for (int i = 0; i < ntabs; i++) if (tabs[i].id == g_tab) cur = i;
     if (!tabs[cur].on) cur = 0;
@@ -1776,6 +1776,10 @@ bool menu_reset_corner(float bx, float scale, ImFont *font, ImFont *font_big, bo
 // page's too).
 static const char *g_bar_names[BAR_N] = {LN("Settings"), LN("Cosmetics"), LN("Randomizer"), LN("Warp"), LN("Save Editor"),
                                          LN("Cheats"), LN("Reset"), LN("Quit"), ""};
+// Kirby: Settings, Reset and Quit only (the others read and write Zelda's game state)
+static bool bar_on(int e) {
+    return !game_is_kirby() || e == BAR_SETTINGS || e == BAR_RESET || e == BAR_QUIT || e == BAR_CLOSE;
+}
 // an entry's tab at x, y (w x ph), its name in the current font at size fs
 static void bar_entry(ImDrawList *dl, float x, float y, float w, float ph, float pad, float fs, bool sel, bool hot,
                       const char *name, float scale) {
@@ -1793,7 +1797,7 @@ static void bar_entry(ImDrawList *dl, float x, float y, float w, float ph, float
 // menu (launcher.mm menu_tip) shows what opens. In the current font, shrunk to fit.
 void menu_bar_picture(float width, float scale) {
     float fs = ImGui::GetFontSize(), natural = 0;
-    for (int e = 0; e < BAR_CLOSE; e++) natural += ImGui::CalcTextSize(L(g_bar_names[e])).x + (2 * 22 + 10) * scale;
+    for (int e = 0; e < BAR_CLOSE; e++) if (bar_on(e)) natural += ImGui::CalcTextSize(L(g_bar_names[e])).x + (2 * 22 + 10) * scale;
     natural += 2 * 30 * scale + fs + 20 * scale;  // (the frame's insets and the X)
     float k = fminf(1.0f, width / natural), s = scale * k, w = natural * k;
     fs *= k;
@@ -1805,6 +1809,7 @@ void menu_bar_picture(float width, float scale) {
     plastic_panel(dl, a, ImVec2(a.x + w, a.y + bh), s);
     float x = a.x + in, y = a.y + in;
     for (int e = 0; e < BAR_CLOSE; e++) {
+        if (!bar_on(e)) continue;
         float ew = ImGui::CalcTextSize(L(g_bar_names[e])).x * k + 2 * pad;
         bar_entry(dl, x, y, ew, ph, pad, fs, e == BAR_SETTINGS, false, L(g_bar_names[e]), s);
         x += ew + gap;
@@ -1845,7 +1850,10 @@ static void bar_draw(ImGuiIO &io, float scale) {
                            ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_E, false) ? 1
                    : pressed(ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft, ImGuiKey_LeftArrow) ||
                            ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) || ImGui::IsKeyPressed(ImGuiKey_Q, false) ? -1 : 0;
-        if (step) g_bar_cur = (g_bar_cur + step + BAR_N) % BAR_N, menu_sfx_play(MENU_SFX_CURSOR);
+        if (step) {
+            do g_bar_cur = (g_bar_cur + step + BAR_N) % BAR_N; while (!bar_on(g_bar_cur));
+            menu_sfx_play(MENU_SFX_CURSOR);
+        }
         if (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceDown, false) || ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false) || ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
             if (g_bar_cur == BAR_CLOSE) set_open(false);
@@ -1861,15 +1869,19 @@ static void bar_draw(ImGuiIO &io, float scale) {
     // too wide for the bar (eight entries: long names - Russian, German - on a phone's larger menu): tighter entries,
     // then the names a little smaller, as the Settings tabs do (tabs_body)
     float text_w[BAR_CLOSE], names_w = 0, tfs = fs;
-    for (int k = 0; k < BAR_CLOSE; k++) names_w += text_w[k] = ImGui::CalcTextSize(L(g_bar_names[k])).x;
-    float room = ws.x - 2 * in - ph - gap * BAR_CLOSE;  // (the close X and the gaps)
-    if (names_w + 2 * pad * BAR_CLOSE > room) pad = fmaxf((room - names_w) / (2 * BAR_CLOSE), 8 * scale);
-    if (names_w + 2 * pad * BAR_CLOSE > room && names_w > 0) {
-        float k = fmaxf((room - 2 * pad * BAR_CLOSE) / names_w, 0.6f);
+    int shown = 0;
+    for (int k = 0; k < BAR_CLOSE; k++)
+        if (bar_on(k)) names_w += text_w[k] = ImGui::CalcTextSize(L(g_bar_names[k])).x, shown++;
+        else text_w[k] = 0;
+    float room = ws.x - 2 * in - ph - gap * shown;  // (the close X and the gaps)
+    if (names_w + 2 * pad * shown > room) pad = fmaxf((room - names_w) / (2 * shown), 8 * scale);
+    if (names_w + 2 * pad * shown > room && names_w > 0) {
+        float k = fmaxf((room - 2 * pad * shown) / names_w, 0.6f);
         tfs *= k;
         for (float &t : text_w) t *= k;
     }
     for (int k = 0; k < BAR_CLOSE; k++) {
+        if (!bar_on(k)) continue;
         float tw = text_w[k], w = tw + 2 * pad;
         ImGui::SetCursorScreenPos(ImVec2(x, y));
         ImGui::PushID(k);
