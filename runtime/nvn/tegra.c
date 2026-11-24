@@ -24,6 +24,11 @@ void tegra_layout_init(TexLayout *t) {
     uint32_t hb = div_up(t->height, t->fmt->bh);
     t->block_height_log2 = tegra_default_block_height_log2(hb);
     t->block_depth_log2 = t->depth > 1 ? block_depth_for(t->depth) : 0;
+    // A block holds at most 16 GOBs, depth included: Kirby's 16x16x16 RGBA8 colour-grading LUT is laid out with blocks
+    // 1 GOB high and 16 deep. With 2 GOBs high its green and blue axes came out scrambled (beige wood drawn magenta,
+    // blue sky cyan, dark blue blotches); only 1 x 16 gives a LUT that rises along every axis.
+    if (t->block_depth_log2 > 4) t->block_depth_log2 = 4;
+    if (t->block_height_log2 + t->block_depth_log2 > 4) t->block_height_log2 = 4 - t->block_depth_log2;
 }
 
 // Block height shrinks with the level so a block never exceeds the level height.

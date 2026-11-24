@@ -60,7 +60,12 @@ bool widescreen_ui_pane_partial(const float *u, uint64_t size) {
 // Off in rooms that should keep 16:9 framing (interiors, dungeons) -- see widescreen_update.
 static bool g_allowed = true;
 static bool g_indoor;
-bool widescreen_allowed(void) { return g_allowed && g_settings.aspect == ASPECT_UNLOCKED && !ENV("LARECOMP_NO_WIDESCREEN"); }
+// Kirby has no widescreen patch: its frame is always 16:9, so a window of another shape must not reshape the render
+// targets (a 1290x722 window rendered at 0.672x0.669: the blur passes sampled the wrong texels - blocky backgrounds -
+// and the right edge kept a stale column).
+bool widescreen_allowed(void) {
+    return g_allowed && !game_is_kirby() && g_settings.aspect == ASPECT_UNLOCKED && !ENV("LARECOMP_NO_WIDESCREEN");
+}
 void widescreen_set_allowed(bool on) { g_allowed = on; }
 
 // Interiors and dungeons use cameras that never load the patched overworld aspect (site 0). Count
