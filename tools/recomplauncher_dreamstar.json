@@ -1,7 +1,7 @@
 {
   "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
   "format": 1,
-  "repo": "OWNER/DreamstarRecomp",
+  "repo": "pixelnorth/DreamstarRecomp",
   "game": {
     "kind": "folder",
     "label": "Your own extracted copy of Kirby Star Allies, version 1.0.0: the folder with exefs and romfs in it.",
