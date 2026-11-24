@@ -2193,3 +2193,7 @@
 {"Some files could not be copied.", "Certains fichiers n'ont pas pu être copiés."},
 {"Reset the settings?", "Réinitialiser les réglages ?"},
 {"Video and sound settings go back to their defaults.\nYour controls stay as they are.", "Les réglages vidéo et son reviennent à leurs valeurs par défaut.\nTes commandes restent telles quelles."},
+{"Preparing the game code (first launch, a few minutes)...", "Préparation du code du jeu (premier lancement, quelques minutes)..."},
+{"Preparing the game code failed.", "La préparation du code du jeu a échoué."},
+{"Try again", "Réessayer"},
+{"PC recompilation - Vulkan", "Recompilation PC - Vulkan"},

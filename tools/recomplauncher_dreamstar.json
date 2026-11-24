@@ -1,0 +1,62 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "repo": "OWNER/DreamstarRecomp",
+  "game": {
+    "kind": "folder",
+    "label": "Your own extracted copy of Kirby Star Allies, version 1.0.0: the folder with exefs and romfs in it.",
+    "check": {
+      "file": "exefs/main"
+    }
+  },
+  "prepare": {
+    "program": [
+      "lasrecomp.exe"
+    ],
+    "args": [
+      "--prepare",
+      "--new-data-dir",
+      "{install}",
+      "--game-files",
+      "{game}"
+    ],
+    "label": "Game code (built from your game files)",
+    "timeout": 3600,
+    "version": "1"
+  },
+  "start": {
+    "program": [
+      "lasrecomp.exe"
+    ],
+    "args": [
+      "--new-data-dir",
+      "{install}"
+    ]
+  },
+  "saves": [
+    "{install}/save"
+  ],
+  "folders": {
+    "saves": [
+      {
+        "path": "{install}/save"
+      }
+    ],
+    "logs": [
+      {
+        "path": "{install}"
+      }
+    ]
+  },
+  "config": [
+    {
+      "id": "main",
+      "format": "ini",
+      "file": [
+        {
+          "path": "{install}/larecomp.ini"
+        }
+      ]
+    }
+  ]
+}

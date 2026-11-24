@@ -644,6 +644,7 @@ static void add_cflags(Args *a, const Tools *t) {
 }
 
 static char g_full_id[GAMELIB_FULL_ID_SIZE];  // this build's library id (gamelib_full_id): GAMELIB_ID-<build ID>
+static bool g_has_subsdk0;  // (Kirby: a third module - tools/gamelib_entry.c then exports its tables)
 
 static PlatProc start_compile(const Tools *t, const Unit *u) {
     Args a = {0};
@@ -655,6 +656,7 @@ static PlatProc start_compile(const Tools *t, const Unit *u) {
     char id[GAMELIB_FULL_ID_SIZE + 32];
     snprintf(id, sizeof id, "-DGAMELIB_ID=\"%s\"", g_full_id);  // (the iOS build's own id for an export)
     add(&a, id);
+    if (g_has_subsdk0) add(&a, "-DGAMELIB_SUBSDK0");
     add(&a, "-c");
     add(&a, u->src);
     add(&a, "-o");
@@ -705,6 +707,7 @@ bool gamebuild_run(const char *game_dir, const GameBuildOpts *o, char *why, size
     snprintf(input_paths[6], sizeof input_paths[6], "%s" SEP "exefs" SEP "subsdk0", game_dir);
     struct stat sub_st;
     const int ngen = stat(input_paths[6], &sub_st) == 0 ? 3 : 2;  // (subsdk0: Kirby's third module, Zelda has none)
+    g_has_subsdk0 = ngen == 3;
     const char *headers[] = {"cpu.h", "simd.h", "simd_fp.h", "gamelib.h"};
     for (int i = 0; i < 4; ++i) snprintf(input_paths[i+2], sizeof input_paths[i+2], "%s" SEP "%s", t.inc, headers[i]);
     // Generator changes should rebuild only chunks whose C changed, as in the existing incremental builder.

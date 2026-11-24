@@ -131,7 +131,7 @@ void rt_crash_explain(char *out, size_t n, const char *log_path) {
         snprintf(head, sizeof head, "The game crashed");
         snprintf(what, sizeof what, "This is a bug in LAS Recomp, not a problem with your game files or PC. %s", report);
     } else {
-        snprintf(head, sizeof head, "LAS Recomp stopped because of an error");
+        snprintf(head, sizeof head, "Dreamstar Recomp stopped because of an error");
         snprintf(what, sizeof what, "%s", report);
     }
     fprintf(stderr, "[crash] %s\n", head);

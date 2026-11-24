@@ -2375,11 +2375,33 @@ static void *prepare_cli_report(void *) {
 // pieces are kept, so the next --prepare resumes. Exit 3.
 static volatile sig_atomic_t g_prep_cli_stop;
 static void prepare_cli_signal(int) { g_prep_cli_stop = 1, g_cancel_build = true, g_prep_skip = 1; }
+static bool kirby_files(const std::string &root);  // (the Kirby start screen, below)
 extern "C" int launcher_prepare_cli(const char *root, const char *src) {
     g_root = root;
     signal(SIGINT, prepare_cli_signal);
     signal(SIGTERM, prepare_cli_signal);
     setenv("LARECOMP_HIDDEN", "1", 1);  // (the window only holds the GPU device: never shown)
+    if (game_is_kirby() || (src && *src && kirby_files(src))) {
+        std::string dir = src && *src ? src : g_settings.game_dir;
+        if (!kirby_files(dir)) {
+            rt_cli_print("error No Kirby Star Allies game files (exefs and romfs) in that folder.\n");
+            return 1;
+        }
+        g_root = dir;
+        snprintf(g_settings.game_dir, sizeof g_settings.game_dir, "%s", dir.c_str());
+        settings_save();
+        pthread_t rep;
+        pthread_create(&rep, NULL, prepare_cli_report, NULL);
+        bool ok = gamelib_present(dir.c_str()) || build_game_code();
+        g_prep_cli_done = true;
+        pthread_join(rep, NULL);
+        if (!ok) {
+            rt_cli_print(("error " + (g_job.empty() ? std::string("The game code could not be built.") : g_job) + "\n").c_str());
+            return g_prep_cli_stop ? 3 : 1;
+        }
+        rt_cli_print("progress 1.000 Ready to play\n");
+        return 0;
+    }
     bool have = src && *src;
     int same = have ? same_game_files(g_root, src) : check_copied_files(g_root).empty();
     if (have && same < 0) {
@@ -2430,10 +2452,28 @@ static bool kirby_files(const std::string &root) {
     const GameVersion *v = game_version_of(root.c_str());
     return v && !strncmp(v->key, "kirby", 5);
 }
+static const char *const KIRBY_NOT_BUILT = "The game code isn't built for these files.";
+// The game code, built on the player's machine from their own files (runtime/gamebuild.c: the generator in the app and
+// the bundled compiler) into <game folder>/lasgame.dll - the release carries none of it. One build at a time.
+static std::atomic<int> g_kirby_build{0};  // 0 idle, 1 building, 2 done, 3 failed
+static void *kirby_build_thread(void *) {
+    g_job.clear(), g_job_failed = false, g_cancel_build = false;
+    bool ok = build_game_code();
+    g_build_frac = -1;
+    g_kirby_build = ok ? 2 : 3;
+    return NULL;
+}
+static void kirby_build_start(void) {
+    if (g_kirby_build == 1) return;
+    g_kirby_build = 1;
+    pthread_t t;
+    if (pthread_create(&t, NULL, kirby_build_thread, NULL) == 0) pthread_detach(t);
+    else g_kirby_build = 3;
+}
 static std::string kirby_status(const std::string &root) {
     if (!kirby_files(root)) return "No Kirby Star Allies game files in this folder.";
     if (!file_exists(root + "/romfs")) return "The romfs folder is missing.";
-    if (!gamelib_present(root.c_str())) return "The game code isn't built for these files.";
+    if (!gamelib_present(root.c_str())) return KIRBY_NOT_BUILT;
     return "";
 }
 static void SDLCALL kirby_picked(void *, const char *const *files, int) {
@@ -2539,13 +2579,13 @@ static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play
     ImVec2 tp = ImGui::GetWindowPos();
     kirby_star(dl, ImVec2(tp.x + x0 + th * 0.42f, tp.y + 50 * s + th * 0.55f), th * 0.42f, 0.15f, IM_COL32(255, 214, 64, 255));
     ImGui::SetCursorPos(ImVec2(x0 + th * 0.95f, 50 * s));
-    const char *t = "Kirby Star Allies";
+    const char *t = "Dreamstar";
     text_fx(dl, ImGui::GetFont(), th, ImGui::GetCursorScreenPos(), IM_COL32(255, 245, 250, 255), IM_COL32(255, 170, 210, 255), t, 3 * s);
     ImGui::Dummy(ImGui::CalcTextSize(t));
     ImGui::PopFont();
     ImGui::PushFont(g_font_small);
     ImGui::SetCursorPosX(x0 + th * 0.95f);
-    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "%s", L("PC version - Vulkan"));
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "%s", L("PC recompilation - Vulkan"));
     ImGui::PopFont();
 
     // the card: game folder, saves
@@ -2584,7 +2624,21 @@ static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play
                             status.empty() ? IM_COL32(110, 230, 140, 255) : IM_COL32(255, 190, 80, 255));
         ImGui::SetCursorPosX(ix + fh);
         if (status.empty()) ImGui::TextColored(ImVec4(0.8f, 1, 0.85f, 1), "%s", L("Game files found, ready to play."));
+        else if (g_kirby_build == 1)
+            ImGui::TextColored(ImVec4(1, 0.95f, 0.7f, 1), "%s", L("Preparing the game code (first launch, a few minutes)..."));
+        else if (g_kirby_build == 3)
+            ImGui::TextColored(ImVec4(1, 0.6f, 0.5f, 1), "%s %s", L("Preparing the game code failed."), L(g_job.c_str()));
         else ImGui::TextColored(ImVec4(1, 0.85f, 0.5f, 1), "%s", L(status.c_str()));
+    }
+    if (g_kirby_build == 1) {  // the build's bar, under the state line
+        ImGui::SetCursorPosX(ix);
+        float f = g_build_frac < 0 ? 0 : g_build_frac > 1 ? 1 : (float)g_build_frac;
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.93f, 0.25f, 0.5f, 1));
+        ImGui::ProgressBar(f, ImVec2(cw - 2 * pad, 0));
+        ImGui::PopStyleColor();
+    } else if (g_kirby_build == 3) {
+        ImGui::SetCursorPosX(ix);
+        if (ImGui::Button(L("Try again"))) kirby_build_start();
     }
     ImGui::SetCursorPosX(ix);
     ImGui::SameLine();
@@ -2910,12 +2964,14 @@ extern "C" void launcher_run(const char *root) {
         }
         if (play) break;
         if (kirby) {
+            if (status == KIRBY_NOT_BUILT && g_kirby_build == 0 && gamebuild_available()) kirby_build_start();
+            if (g_kirby_build == 2) g_kirby_build = 0, status = kirby_status(g_root);
             pthread_mutex_lock(&g_lock);
             std::string pick;
             pick.swap(g_kirby_pick);
             pthread_mutex_unlock(&g_lock);
-            if (!pick.empty()) {
-                g_root = pick;
+            if (!pick.empty() && g_kirby_build != 1) {
+                g_root = pick, g_kirby_build = 0;
                 status = kirby_status(g_root);
                 snprintf(g_settings.game_dir, sizeof g_settings.game_dir, "%s", g_root.c_str());
                 settings_save();

@@ -534,7 +534,7 @@ static void require_cpu(void) {
     __builtin_cpu_init();
     if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma") && __builtin_cpu_supports("bmi2")) return;
     MessageBoxA(NULL, "LAS Recomp needs a CPU with AVX2 (Intel Haswell / 2013 or newer, AMD Excavator / Zen or newer).",
-                "Kirby Star Allies", MB_ICONERROR | MB_OK);
+                "Dreamstar Recomp", MB_ICONERROR | MB_OK);
     ExitProcess(1);
 #endif
 }
@@ -547,7 +547,7 @@ void plat_fatal_notice(void) {
     rt_crash_explain(text, sizeof text, g_log_path);
     if (!g_log_path[0]) return;
     fflush(stderr);
-    MessageBoxA(NULL, text, "Kirby Star Allies", MB_ICONERROR | MB_OK);
+    MessageBoxA(NULL, text, "Dreamstar Recomp", MB_ICONERROR | MB_OK);
 }
 
 bool plat_module_name(uint64_t pc, char *out, size_t n) {
