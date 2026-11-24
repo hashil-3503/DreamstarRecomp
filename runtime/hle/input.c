@@ -908,7 +908,17 @@ static void fill_state(Cpu *c) {
     touch_stick(&tlx, &tly);
     int32_t lx = clamp_axis((menu ? 0 : key_lx + pad_lx + tlx) + script_lx), ly = clamp_axis((menu ? 0 : key_ly + pad_ly + tly) + script_ly);
     int32_t rx = clamp_axis((menu ? 0 : key_rx + pad_rx) + script_rx), ry = clamp_axis((menu ? 0 : key_ry + pad_ry) + script_ry);
-    if (game_is_kirby()) goto stick_bits;  // (the d-pad items, mirror mode, door jumps, companions: Zelda's)
+    if (game_is_kirby()) {  // (the d-pad items, mirror mode, door jumps, companions: Zelda's)
+        // Kirby walks with the stick only: the d-pad (arrow keys) drives it too while the stick rests, and stays the
+        // d-pad for the menus
+        if (!menu && (int64_t)lx * lx + (int64_t)ly * ly < 8000ll * 8000) {
+            uint64_t d = key_buttons | pad_buttons | script_buttons;
+            int dx = (int)((d >> BTN_RIGHT) & 1) - (int)((d >> BTN_LEFT) & 1), dy = (int)((d >> BTN_UP) & 1) - (int)((d >> BTN_DOWN) & 1);
+            int32_t m = dx && dy ? 23170 : 32767;  // diagonals: same speed (32767 / sqrt 2)
+            if (dx || dy) lx = dx * m, ly = dy * m;
+        }
+        goto stick_bits;
+    }
     if (!menu) {  // d-pad items (setting): the Items page assigns, play uses (runtime/hle/dpad_items.c; before mirroring:
         extern uint64_t dpad_items_input(uint64_t b);  // the d-pad as held)
         b = dpad_items_input(b);
@@ -1024,4 +1034,47 @@ HLE_FUNC("_ZN2nn3hid22GetVibrationDeviceInfoEPNS0_19VibrationDeviceInfoERKNS0_21
     info[0] = 1;        // VibrationDeviceType_LinearResonantActuator
     int side = rumble_side(h);
     info[1] = side < 0 ? 0 : (uint32_t)side + 1;  // None=0, Left=1, Right=2
+}
+
+// Six-axis sensor (Kirby reads it with the sticks every frame): the hid shared memory isn't filled, so the SDK returned
+// an all-zero state (no gravity, a zero orientation matrix) and "not at rest". A controller lying still instead.
+HLE_FUNC("_ZN2nn3hid23GetSixAxisSensorHandlesEPNS0_19SixAxisSensorHandleEiRKjNS_4util10BitFlagSetILi32ENS0_12NpadStyleTagEEE", hid_sixaxis_handles) {
+    uint32_t *out = (uint32_t *)(uintptr_t)c->x[0];
+    int n = (int)c->x[1] < 1 ? (int)c->x[1] : 1;
+    uint32_t id = *(uint32_t *)(uintptr_t)c->x[2];
+    for (int i = 0; i < n; i++) out[i] = 3u | ((id & 0xFF) << 8);
+    c->x[0] = (uint64_t)n;
+}
+HLE_FUNC("_ZN2nn3hid18StartSixAxisSensorERKNS0_19SixAxisSensorHandleE", hid_sixaxis_start) { (void)c; }
+HLE_FUNC("_ZN2nn3hid17StopSixAxisSensorERKNS0_19SixAxisSensorHandleE", hid_sixaxis_stop) { (void)c; }
+HLE_FUNC("_ZN2nn3hid21IsSixAxisSensorAtRestERKNS0_19SixAxisSensorHandleE", hid_sixaxis_rest) { c->x[0] = 1; }
+// SixAxisSensorState: {int64 delta time ns, int64 sampling, float3 acceleration, angular velocity, angle, direction x/y/z}
+HLE_FUNC("_ZN2nn3hid21GetSixAxisSensorStateEPNS0_18SixAxisSensorStateERKNS0_19SixAxisSensorHandleE", hid_sixaxis_state) {
+    uint8_t *s = (uint8_t *)(uintptr_t)c->x[0];
+    static int64_t n;
+    memset(s, 0, 0x58);
+    *(int64_t *)s = 5000000;
+    *(int64_t *)(s + 8) = ++n;
+    float *f = (float *)(s + 0x10);
+    f[2] = -1.0f;                          // gravity (lying flat, face up)
+    f[9] = 1.0f, f[13] = 1.0f, f[17] = 1.0f;  // direction: identity
+}
+
+// Touch screen (Kirby reads it in its menus and on the world map): no touch. The SDK read the hid shared memory,
+// which nothing fills.
+HLE_FUNC("_ZN2nn3hid21InitializeTouchScreenEv", hid_touch_init) { (void)c; }
+HLE_FUNC("_ZN2nn3hid19GetTouchScreenStateILm16EEEvPNS0_16TouchScreenStateIXT_EEE", hid_touch_state16) {
+    static int64_t n;
+    uint8_t *s = (uint8_t *)(uintptr_t)c->x[0];
+    memset(s, 0, 0x10 + 16 * 0x28);  // {int64 sampling, int32 count, pad, TouchState[16]}
+    *(int64_t *)s = ++n;
+}
+
+// Debug pad (Kirby merges it into player 1: its buttons OR-ed in, its sticks taken when they lean further). Not
+// connected, all zero. The SDK read it from the hid shared memory, which nothing fills.
+HLE_FUNC("_ZN2nn3hid16GetDebugPadStateEPNS0_13DebugPadStateE", hid_debugpad_state) {
+    static int64_t n;
+    uint8_t *s = (uint8_t *)(uintptr_t)c->x[0];
+    memset(s, 0, 0x20);  // {int64 sampling, u32 attributes, u32 buttons, AnalogStick L, R}
+    *(int64_t *)s = ++n;
 }
