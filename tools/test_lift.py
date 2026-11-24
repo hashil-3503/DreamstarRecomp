@@ -3,6 +3,7 @@
 Usage: test_lift.py <nso> <base> [count] [seed]
 """
 import hashlib
+import zlib
 import os
 import random
 import struct
@@ -108,7 +109,7 @@ def run_unicorn(mu, n, w, pc, state, buf0):
     onz = mu.reg_read(A.UC_ARM64_REG_NZCV) & 0xF0000000
     ov = [mu.reg_read(A.UC_ARM64_REG_Q0 + i) for i in range(32)]
     opc = mu.reg_read(A.UC_ARM64_REG_PC)
-    h = hashlib.md5(bytes(mu.mem_read(BUF, BUF_SIZE))).hexdigest()
+    h = '%032x' % zlib.crc32(bytes(mu.mem_read(BUF, BUF_SIZE)))
     return ox, osp, onz, ov, opc, h
 
 
@@ -125,7 +126,7 @@ def main():
     seen, picks = set(), []
     order = list(range(len(words)))
     r.shuffle(order)
-    lifter = Lifter(base)
+    lifter = Lifter(base, simd=os.environ.get('LIFT_SIMD', 'asm'))
     unsupported = {}
     for i in order:
         w = words[i]
@@ -157,7 +158,7 @@ def main():
         f.write(f'int ntests = {len(picks)};\n')
     harness = os.path.join(ROOT, 'tools', 'test_harness.c')
     exe = os.path.join(work, 'harness')
-    subprocess.check_call(['clang', '-O1', '-Wno-deprecated-declarations', '-fno-strict-aliasing', '-I', os.path.join(ROOT, 'runtime'),
+    subprocess.check_call(['clang', '-O1', *os.environ.get('LIFT_CFLAGS', '').split(), '-Wno-deprecated-declarations', '-fno-strict-aliasing', '-I', os.path.join(ROOT, 'runtime'),
                            '-o', exe, harness, os.path.join(work, 'tests.c')])
 
     mu = uc.Uc(uc.UC_ARCH_ARM64, uc.UC_MODE_ARM)

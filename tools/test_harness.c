@@ -1,8 +1,12 @@
 // Runs lifted single-instruction tests; prints final state per case.
-#include <CommonCrypto/CommonDigest.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/mman.h>
+#endif
 
 #include "cpu.h"
 
@@ -20,11 +24,16 @@ uint64_t rt_ticks(void) { return 0; }
 
 static void *map_file(const char *path, uint64_t addr, size_t *size) {
     FILE *f = fopen(path, "rb");
+    if (!f) { perror(path); exit(1); }
     fseek(f, 0, SEEK_END);
     *size = ftell(f);
     fseek(f, 0, SEEK_SET);
     size_t len = (*size + 0x3fff) & ~0x3fffull;
+#ifdef _WIN32
+    void *p = VirtualAlloc((void *)addr, len, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+#else
     void *p = mmap((void *)addr, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
+#endif
     if (p != (void *)addr) { perror("mmap"); exit(1); }
     fread(p, 1, *size, f);
     fclose(f);
@@ -50,11 +59,14 @@ int main(int argc, char **argv) {
         memcpy(c.v, in.v, sizeof c.v);
         c.excl_addr = ~0ull;
         tests[in.k](&c);
-        unsigned char md[16];
-        CC_MD5((void *)BUF, BUF_SIZE, md);
+        uint32_t crc = 0xffffffffu;  // (zlib.crc32 on the Python side)
+        for (const uint8_t *b = (const uint8_t *)BUF, *e = b + BUF_SIZE; b < e; b++) {
+            crc ^= *b;
+            for (int k = 0; k < 8; k++) crc = crc >> 1 ^ (0xedb88320u & -(crc & 1));
+        }
         for (int i = 0; i < 31; i++) printf("%llx ", c.x[i]);
         printf("%llx %llx %llx ", c.sp, c.nzcv & 0xf0000000ull, c.pc);
-        for (int i = 0; i < 16; i++) printf("%02x", md[i]);
+        printf("%032x", ~crc);
         for (int i = 0; i < 32; i++) printf(" %016llx%016llx", (uint64_t)(c.v[i] >> 64), (uint64_t)c.v[i]);
         printf("\n");
     }
