@@ -20,6 +20,7 @@ static int g_t30;  // (the case's Internal FPS target is 30)
 bool pace_target_30(void) { return g_t30; }  // (output_scale.c's Internal FPS target: nvn/pace.c)
 static bool g_menu;  // (the case's menu is open: wmenu_at .. wmenu_until)
 bool menu_is_open(void) { return g_menu; }  // (output_scale.c holds Dynamic while the menu is open: runtime/ui/menu.mm)
+bool game_is_kirby(void) { return false; }  // (output_scale.c reshape_shape)
 static int g_pace_slow;  // (pacer cases: the pacer holds the game at 30 - nvn/pace.c pace_is_slow)
 bool pace_is_slow(void) { return g_pace_slow; }
 static int g_pace_try;  // (pacer cases: Dynamic asked the frame pacer to try 60 - nvn/pace.c pace_try_60)

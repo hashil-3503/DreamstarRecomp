@@ -60,11 +60,9 @@ bool widescreen_ui_pane_partial(const float *u, uint64_t size) {
 // Off in rooms that should keep 16:9 framing (interiors, dungeons) -- see widescreen_update.
 static bool g_allowed = true;
 static bool g_indoor;
-// Kirby has no widescreen patch: its frame is always 16:9, so a window of another shape must not reshape the render
-// targets (a 1290x722 window rendered at 0.672x0.669: the blur passes sampled the wrong texels - blocky backgrounds -
-// and the right edge kept a stale column).
+// (Kirby: only windows clearly wider than 16:9, runtime/nvn/output_scale.c reshape_shape)
 bool widescreen_allowed(void) {
-    return g_allowed && !game_is_kirby() && g_settings.aspect == ASPECT_UNLOCKED && !ENV("LARECOMP_NO_WIDESCREEN");
+    return g_allowed && g_settings.aspect == ASPECT_UNLOCKED && !ENV("LARECOMP_NO_WIDESCREEN");
 }
 void widescreen_set_allowed(bool on) { g_allowed = on; }
 
@@ -154,7 +152,16 @@ static bool level_is_interior(void) {
     return lv[0] && strcmp(lv, "Field") != 0;
 }
 
+// Kirby's camera aspect: one 16:9 float in its rodata, read by its only getter (main 0x7000184ca0, the cameras of
+// levels, the world map and cutscenes): widened with the window each frame (pace.c kirby_fps's per-frame hook).
+void kirby_wide_frame(void) {
+    *(float *)(uintptr_t)0x700039a650ull = 16.0f / 9.0f * g_wide;
+}
+// (exec.c: a draw into Kirby's own 1920x1080 target - a movie or 2D menu - this frame: shown boxed)
+void widescreen_kirby_boxed(void) { extern uint64_t renderer_exec_frame(void); g_backdrop_frame = renderer_exec_frame(); }
+
 bool widescreen_frame_boxed(uint64_t frame) {
+    if (game_is_kirby()) return g_backdrop_frame == frame;
     static bool last;
     static uint64_t interior_until;  // keep boxing briefly after leaving: the first (dark) frames still show stale sides
     bool in = level_is_interior();

@@ -1179,12 +1179,20 @@ static void alloc_scale(double h, double shape, double *ax, double *ay) {
 
 // The render scale the settings give a dw x dh window, worked out without a frame: the start screen's Video tab, which
 // shows the size before the game draws anything (renderer_get_scale is 1x until the first frame). Dynamic: its top.
+// Kirby widens its camera only (runtime/hle/widescreen.c kirby_wide_frame), for windows clearly wider than 16:9: a
+// nearly 16:9 one reshaped (1290x722: 0.672x0.669) made the blur passes sample the wrong texels - blocky backgrounds -
+// and left a stale column at the right edge. Those keep the 16:9 render, fitted.
+static bool reshape_shape(double shape) {
+    extern bool game_is_kirby(void);
+    return game_is_kirby() ? shape >= 1.1 : fabs(shape - 1.0) > 0.005;
+}
+
 void output_scale_estimate(double dw, double dh, bool reshape_allowed, double *sx, double *sy) {
     if (!(dw > 0) || !(dh > 0)) { *sx = *sy = 1; return; }
     double fit = fmin(dw / 1920.0, dh / 1080.0), shape = (dw / dh) / (16.0 / 9.0);
     const char *e = getenv("LARECOMP_WIDE_TEST");
     if (e && atof(e) > 0) shape = atof(e);
-    bool reshape = reshape_allowed && fabs(shape - 1.0) > 0.005;
+    bool reshape = reshape_allowed && reshape_shape(shape);
     if (!reshape) shape = 1.0;
     int mode = g_settings.dyn_res ? RES_DYNAMIC : g_settings.res_mode;
     double h = getenv("LARECOMP_SCALE") && atof(getenv("LARECOMP_SCALE")) > 0 ? atof(getenv("LARECOMP_SCALE"))
@@ -1198,7 +1206,7 @@ void output_scale(double dw, double dh, bool reshape_allowed, double now, double
     if (forced < 0) forced = getenv("LARECOMP_SCALE") ? atof(getenv("LARECOMP_SCALE")) : 0;
     if (wide_test < 0) wide_test = getenv("LARECOMP_WIDE_TEST") ? atof(getenv("LARECOMP_WIDE_TEST")) : 0;
     double shape = wide_test > 0 ? wide_test : (dw / dh) / (16.0 / 9.0);
-    bool reshape = reshape_allowed && fabs(shape - 1.0) > 0.005;
+    bool reshape = reshape_allowed && reshape_shape(shape);
     if (!reshape) shape = 1.0;
     // render height in units of the Switch's 1080 lines
     double h, dyn = 1.0;

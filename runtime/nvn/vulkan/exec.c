@@ -7330,7 +7330,21 @@ static void draw_(CmdRec *r, bool indexed) {
     if (prof) prof_tex += SDL_GetTicksNS() - prof_tx_;
     const void *hud_u = NULL;  // (runtime/hle/hud_corners.c: the window-wide uniforms of a UI draw)
     float hud_k = 1, hud_ky = 1;
-    if (fabsf(pass_sx - pass_sy) > 0.01f * pass_sy && st.rt.ncolor && renderer_texture_presented(st.rt.color[0])) {
+    extern bool game_is_kirby(void);
+    if (fabsf(pass_sx - pass_sy) > 0.01f * pass_sy && st.rt.ncolor && game_is_kirby() && st.rt.color[0]->width == 1920 &&
+        st.rt.color[0]->height == 1080 && !renderer_texture_presented(st.rt.color[0])) {
+        // Kirby draws its movies and full-screen 2D menus into a 1920x1080 target of its own and copies that to the
+        // screen; a 3D frame never draws into one (its scene is 1440x810, the HUD goes to the screen). Those draws go in
+        // a centred 16:9 box, and the frame is shown boxed (widescreen_present_crop): stretched to the window before.
+        int pw, ph;
+        pass_size(&pw, &ph);
+        float u = fminf(pass_sx, pass_sy);
+        vp_sx = vp_sy = u;
+        vp_ox = (pw - st.rt.color[0]->width * u) * 0.5f;
+        vp_oy = (ph - st.rt.color[0]->height * u) * 0.5f;
+        extern void widescreen_kirby_boxed(void);
+        widescreen_kirby_boxed();
+    } else if (fabsf(pass_sx - pass_sy) > 0.01f * pass_sy && st.rt.ncolor && renderer_texture_presented(st.rt.color[0])) {
         // Draws into the swapchain image (see renderer.m): composites fill the window, UI goes in a centred 16:9 box.
         bool reads_scene = false;
         for (int i = 0; i < pr->fi->ntex && i < 64; i++)

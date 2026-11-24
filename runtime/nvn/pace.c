@@ -335,6 +335,8 @@ static void kirby_fps(void) {
     uint32_t *t = (uint32_t *)(uintptr_t)0x700039a48cull;
     const uint32_t *want = g_settings.fps_target == FPS_TARGET_30 ? orig : fast;  // (the setting itself: not Dynamic resolution's)
     if (memcmp(t, want, sizeof orig)) memcpy(t, want, sizeof orig);
+    extern void kirby_wide_frame(void);  // (runtime/hle/widescreen.c: the camera's aspect)
+    kirby_wide_frame();
 #endif
 }
 
