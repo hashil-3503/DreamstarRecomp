@@ -708,7 +708,7 @@
 {"Effects", "Effecten"},
 {"Enable reverb", "Galm aan"},
 {"The game's echo in caves, dungeons and big rooms.", "De echo van het spel in grotten, kerkers en grote ruimtes."},
-{"LAS Recomp menu sounds", "Menugeluiden LAS Recomp"},
+{"Menu sounds", "Menugeluiden"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "Geluiden als je beweegt en kiest in de menu's van LAS Recomp."},
 {"Load a save first.", "Laad eerst een opslagbestand."},
 {"Quit", "Afsluiten"},

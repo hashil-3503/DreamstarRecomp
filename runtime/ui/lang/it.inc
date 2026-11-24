@@ -708,7 +708,7 @@
 {"Effects", "Effetti"},
 {"Enable reverb", "Attiva riverbero"},
 {"The game's echo in caves, dungeons and big rooms.", "L'eco del gioco in grotte, labirinti e stanze grandi."},
-{"LAS Recomp menu sounds", "Suoni menu LAS Recomp"},
+{"Menu sounds", "Suoni menu"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "Suoni quando ti muovi e scegli nei menu di LAS Recomp."},
 {"Load a save first.", "Carica prima un salvataggio."},
 {"Quit", "Esci"},

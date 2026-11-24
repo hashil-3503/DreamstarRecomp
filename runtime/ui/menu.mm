@@ -1016,7 +1016,7 @@ static void tab_audio(void) {
     opt_section("Effects");
     opt_toggle("Enable reverb", &g_settings.reverb, true,
                "The game's echo in caves, dungeons and big rooms.");
-    opt_toggle("LAS Recomp menu sounds", &g_settings.menu_sounds, true,
+    opt_toggle("Menu sounds", &g_settings.menu_sounds, true,
                "Sounds when you move around and pick things in LAS Recomp's menus.");
     opt_end();
 }

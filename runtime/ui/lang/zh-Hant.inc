@@ -708,7 +708,7 @@
 {"Effects", "效果"},
 {"Enable reverb", "啟用殘響"},
 {"The game's echo in caves, dungeons and big rooms.", "遊戲在洞窟、迷宮和大房間裡的回音。"},
-{"LAS Recomp menu sounds", "LAS Recomp 選單音效"},
+{"Menu sounds", "選單音效"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "在 LAS Recomp 選單中移動和選擇時的音效。"},
 {"Load a save first.", "請先載入存檔。"},
 {"Quit", "結束"},

@@ -2545,7 +2545,8 @@ extern "C" void launcher_run(const char *root) {
 #if PLAT_TOUCH
     plat_touch_shortcuts_sync();  // (seeds added or deleted outside the app since the last run)
 #endif
-    static bool update_checked;  // (once per launch, not again after a "Title screen" reboot)
+    // (Kirby fork: no update check - its updates are LAS Recomp's, the Zelda build)
+    static bool update_checked = true;
     if (!update_checked && !getenv("LARECOMP_NO_UPDATE_CHECK")) {
         update_checked = true;
         pthread_t t;

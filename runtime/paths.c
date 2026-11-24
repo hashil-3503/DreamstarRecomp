@@ -97,7 +97,7 @@ static bool writable(const char *dir) {
 
 static void fail(const char *msg) {
     fprintf(stderr, "%s\n", msg);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "LAS Recomp", msg, NULL);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Kirby Star Allies", msg, NULL);
     exit(1);
 }
 
@@ -397,7 +397,7 @@ void rt_paths_init(void) {
             const SDL_MessageBoxButtonData b[] = {{SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Try again"},
                                                   {0, 1, "Use the default folder"},
                                                   {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 2, "Quit"}};
-            const SDL_MessageBoxData box = {SDL_MESSAGEBOX_WARNING, NULL, "LAS Recomp", msg, 3, b, NULL};
+            const SDL_MessageBoxData box = {SDL_MESSAGEBOX_WARNING, NULL, "Kirby Star Allies", msg, 3, b, NULL};
             int k = 2;
             if (!SDL_ShowMessageBox(&box, &k)) fprintf(stderr, "%s\n", msg);
             if (k == 2) exit(1);

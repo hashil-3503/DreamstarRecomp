@@ -708,7 +708,7 @@
 {"Effects", "エフェクト"},
 {"Enable reverb", "リバーブを有効にする"},
 {"The game's echo in caves, dungeons and big rooms.", "どうくつやダンジョン、広い部屋での響き。"},
-{"LAS Recomp menu sounds", "LAS Recompのメニュー音"},
+{"Menu sounds", "メニュー音"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "LAS Recompのメニューで移動したり選んだりしたときの音です。"},
 {"Load a save first.", "先にセーブデータをロードしてください。"},
 {"Quit", "終了"},

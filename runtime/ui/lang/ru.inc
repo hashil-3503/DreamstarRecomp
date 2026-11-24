@@ -708,7 +708,7 @@
 {"Effects", "Эффекты"},
 {"Enable reverb", "Включить реверберацию"},
 {"The game's echo in caves, dungeons and big rooms.", "Эхо игры в пещерах, подземельях и больших залах."},
-{"LAS Recomp menu sounds", "Звуки меню LAS Recomp"},
+{"Menu sounds", "Звуки меню"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "Звуки при перемещении и выборе в меню LAS Recomp."},
 {"Load a save first.", "Сначала загрузите сохранение."},
 {"Quit", "Выход"},

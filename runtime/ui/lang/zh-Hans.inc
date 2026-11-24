@@ -708,7 +708,7 @@
 {"Effects", "效果"},
 {"Enable reverb", "启用混响"},
 {"The game's echo in caves, dungeons and big rooms.", "游戏在洞窟、迷宫和大房间里的回声。"},
-{"LAS Recomp menu sounds", "LAS Recomp 菜单音效"},
+{"Menu sounds", "菜单音效"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "在 LAS Recomp 菜单中移动和选择时的音效。"},
 {"Load a save first.", "请先读取存档。"},
 {"Quit", "退出"},

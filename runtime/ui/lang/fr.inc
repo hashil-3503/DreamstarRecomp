@@ -708,7 +708,7 @@
 {"Effects", "Effets"},
 {"Enable reverb", "Activer la réverb"},
 {"The game's echo in caves, dungeons and big rooms.", "L'écho du jeu dans les grottes, les donjons et les grandes salles."},
-{"LAS Recomp menu sounds", "Sons des menus LAS Recomp"},
+{"Menu sounds", "Sons des menus"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "Les sons quand tu te déplaces et choisis dans les menus de LAS Recomp."},
 {"Load a save first.", "Charge d'abord une sauvegarde."},
 {"Quit", "Quitter"},

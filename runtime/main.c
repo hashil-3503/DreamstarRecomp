@@ -367,7 +367,7 @@ void rt_cli_print(const char *s) {
         for (const char *p = s; n && WriteFile(g_cli_out, p, (DWORD)n, &w, NULL) && w; p += w, n -= w) {}
         return;
     }
-    if (!plat_cli_write(s, n)) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "LAS Recomp", s, NULL);
+    if (!plat_cli_write(s, n)) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Kirby Star Allies", s, NULL);
 #else
     for (const char *p = s; n && g_cli_fd >= 0;) {
         ssize_t w = write(g_cli_fd, p, n);

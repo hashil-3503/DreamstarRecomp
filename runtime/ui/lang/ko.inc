@@ -708,7 +708,7 @@
 {"Effects", "효과"},
 {"Enable reverb", "리버브 사용"},
 {"The game's echo in caves, dungeons and big rooms.", "동굴, 던전, 큰 방에서 울리는 소리입니다."},
-{"LAS Recomp menu sounds", "LAS Recomp 메뉴 소리"},
+{"Menu sounds", "메뉴 소리"},
 {"Sounds when you move around and pick things in LAS Recomp's menus.", "LAS Recomp 메뉴에서 이동하고 고를 때 나는 소리입니다."},
 {"Load a save first.", "먼저 세이브 데이터를 불러오세요."},
 {"Quit", "종료"},
