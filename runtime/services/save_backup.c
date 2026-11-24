@@ -206,8 +206,7 @@ bool save_import(const char *dir, const char *want, char *msg, size_t n) {
     remove_tree(to);
     int files = 0;
     bool ok = copy_files(from, to, &files);
-    snprintf(msg, n, ok ? "Imported %d file(s). The previous save is in the backups." : "Some files could not be copied.",
-             files);
+    snprintf(msg, n, ok ? "Save imported. The previous save is in the backups." : "Some files could not be copied.");
     LOG("[save] imported %s -> %s (%d files)%s\n", from, to, files, ok ? "" : " - SOME FILES FAILED");
     return ok;
 }

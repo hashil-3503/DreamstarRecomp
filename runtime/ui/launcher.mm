@@ -2454,6 +2454,30 @@ static void SDLCALL kirby_import_picked(void *, const char *const *files, int) {
     g_kirby_import = files[0];
     pthread_mutex_unlock(&g_lock);
 }
+// "2026-11-24_15-42-34" -> "24/11/2026 15:42" (a backup folder's name, as the list shows it)
+static const char *kirby_backup_label(const char *name) {
+    static char b[48];
+    int y, mo, d, h, mi, se;
+    if (sscanf(name, "%d-%d-%d_%d-%d-%d", &y, &mo, &d, &h, &mi, &se) == 6)
+        snprintf(b, sizeof b, "%02d/%02d/%04d  %02d:%02d", d, mo, y, h, mi);
+    else
+        snprintf(b, sizeof b, "%s", name);
+    return b;
+}
+// a five-point star, filled (the start screen's decoration and its title's mark)
+static void kirby_star(ImDrawList *dl, ImVec2 c, float r, float spin, ImU32 col) {
+    ImVec2 p[10];
+    for (int i = 0; i < 10; i++) {
+        float a = spin + 3.14159265f * i / 5, rr = i % 2 ? r * 0.45f : r;
+        p[i] = ImVec2(c.x + rr * sinf(a), c.y - rr * cosf(a));
+    }
+    for (int i = 0; i < 10; i++) dl->AddTriangleFilled(c, p[i], p[(i + 1) % 10], col);
+}
+// a section's small capitals label
+static void kirby_label(float x0, const char *t) {
+    ImGui::SetCursorPosX(x0);
+    ImGui::TextColored(ImVec4(1, 0.86f, 0.93f, 0.85f), "%s", i18n_upper(L(t)).c_str());
+}
 static void kirby_saves(float x0) {
     static char msg[300];
     static char names[16][32];
@@ -2472,21 +2496,24 @@ static void kirby_saves(float x0) {
         if (r >= 0 && r < n) save_backup_restore(names[r], msg, sizeof msg);
         if (msg[0]) fprintf(stderr, "[save] start screen: %s\n", msg), n = save_backup_list(names, 16);
     }
+    kirby_label(x0, "Saves");
     ImGui::SetCursorPosX(x0);
-    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "Saves");
-    ImGui::SetCursorPosX(x0);
-    if (ImGui::Button("Import Switch save..."))
+    if (ImGui::Button(L("Import a Switch save...")))
         SDL_ShowOpenFolderDialog(kirby_import_picked, NULL, g_launcher_win, NULL, false);
     if (n > 0) {
+        ImGui::SameLine(0, 40 * ImGui::GetFontSize() / 30);
+        ImGui::TextColored(ImVec4(1, 1, 1, 0.75f), "%s", L("Backup"));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(ImGui::CalcTextSize("0000-00-00_00-00-00-0").x + ImGui::GetFrameHeight() * 2);
-        ImGui::Combo("##backup", &sel, [](void *d, int i) { return (const char *)((char (*)[32])d)[i]; }, names, n);
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("00/00/0000  00:00").x + ImGui::GetFrameHeight() * 2);
+        ImGui::Combo("##backup", &sel, [](void *d, int i) { return kirby_backup_label(((char (*)[32])d)[i]); }, names, n);
         ImGui::SameLine();
-        if (ImGui::Button("Restore backup")) save_backup_restore(names[sel], msg, sizeof msg), n = -1;
+        if (ImGui::Button(L("Restore"))) save_backup_restore(names[sel], msg, sizeof msg), n = -1;
     }
     if (msg[0]) {
         ImGui::SetCursorPosX(x0);
-        ImGui::TextColored(ImVec4(1, 0.95f, 0.7f, 1), "%s", msg);
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextColored(ImVec4(1, 0.95f, 0.7f, 1), "%s", L_line(msg).c_str());
+        ImGui::PopTextWrapPos();
     }
 }
 static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play) {
@@ -2494,44 +2521,128 @@ static void kirby_page(float s, ImVec2 ds, const std::string &status, bool &play
     bg->AddRectFilledMultiColor(ImVec2(0, 0), ds, IM_COL32(255, 150, 190, 255), IM_COL32(255, 196, 120, 255),
                                 IM_COL32(120, 170, 255, 255), IM_COL32(190, 120, 230, 255));
     bg->AddRectFilled(ImVec2(0, 0), ds, IM_COL32(20, 10, 40, 90));
+    {   // stars drifting up, twinkling (fixed places from a small hash: the same each launch)
+        float t = (float)ImGui::GetTime();
+        for (int i = 0; i < 26; i++) {
+            uint32_t h = (uint32_t)i * 2654435761u;
+            float x = (h % 1000) / 1000.0f * ds.x, sp = 6 + (h >> 10) % 14, r = (6 + (h >> 16) % 14) * s;
+            float y = fmodf((h >> 4) % 1000 / 1000.0f * ds.y - t * sp * s + 4 * ds.y, ds.y + 4 * r) - 2 * r;
+            float a = 0.10f + 0.10f * sinf(t * (0.6f + (h >> 20) % 7 * 0.15f) + i);
+            kirby_star(bg, ImVec2(x, y), r, t * 0.2f + i, IM_COL32(255, 255, 255, (int)(255 * a)));
+        }
+    }
     float x0 = 90 * s;
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    // the title: a yellow star, then the name
     ImGui::PushFont(g_font_title);
-    ImGui::SetCursorPos(ImVec2(x0, 110 * s));
+    float th = ImGui::GetFontSize();
+    ImVec2 tp = ImGui::GetWindowPos();
+    kirby_star(dl, ImVec2(tp.x + x0 + th * 0.42f, tp.y + 50 * s + th * 0.55f), th * 0.42f, 0.15f, IM_COL32(255, 214, 64, 255));
+    ImGui::SetCursorPos(ImVec2(x0 + th * 0.95f, 50 * s));
     const char *t = "Kirby Star Allies";
-    text_fx(ImGui::GetWindowDrawList(), ImGui::GetFont(), ImGui::GetFontSize(), ImGui::GetCursorScreenPos(),
-            IM_COL32(255, 245, 250, 255), IM_COL32(255, 170, 210, 255), t, 3 * s);
+    text_fx(dl, ImGui::GetFont(), th, ImGui::GetCursorScreenPos(), IM_COL32(255, 245, 250, 255), IM_COL32(255, 170, 210, 255), t, 3 * s);
     ImGui::Dummy(ImGui::CalcTextSize(t));
     ImGui::PopFont();
-
     ImGui::PushFont(g_font_small);
-    ImGui::SetCursorPos(ImVec2(x0, 300 * s));
-    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "Game folder");
-    ImGui::SetCursorPosX(x0);
-    ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", g_root.c_str());
-    ImGui::SetCursorPosX(x0);
-    if (ImGui::Button("Change...")) SDL_ShowOpenFolderDialog(kirby_picked, NULL, g_launcher_win, NULL, false);
-    if (!status.empty()) {
-        ImGui::SetCursorPosX(x0);
-        ImGui::TextColored(ImVec4(1, 0.85f, 0.5f, 1), "!  %s", status.c_str());
-    }
-    ImGui::Dummy(ImVec2(0, 24 * s));
-    kirby_saves(x0);
-    float below = ImGui::GetCursorPosY() + 30 * s;  // (a small window: Play under the saves' message, not on it)
+    ImGui::SetCursorPosX(x0 + th * 0.95f);
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.8f), "%s", L("PC version - Vulkan"));
     ImGui::PopFont();
 
+    // the card: game folder, saves
+    float cx = x0, cy = 220 * s, pad = 34 * s, cw = fminf(1000 * s, ds.x - 2 * x0);
+    ImGui::PushFont(g_font_small);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12 * s);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(18 * s, 8 * s));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14 * s, 12 * s));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 1, 1, 0.16f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.28f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.38f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.1f, 0.05f, 0.2f, 0.45f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.15f, 0.08f, 0.3f, 0.55f));
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.22f, 0.12f, 0.34f, 0.97f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.93f, 0.25f, 0.5f, 0.7f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1, 0.4f, 0.62f, 0.8f));
+    dl->ChannelsSplit(2);  // (the card drawn behind what's in it, its height known after)
+    dl->ChannelsSetCurrent(1);
+    float ix = cx + pad;
+    ImGui::SetCursorPos(ImVec2(ix, cy + pad));
+    kirby_label(ix, "Game folder");
+    ImGui::SetCursorPosX(ix);
+    {   // the path, shortened from the left to fit the card
+        std::string p = g_root;
+        float room = cw - 2 * pad;
+        while (p.size() > 4 && ImGui::CalcTextSize(p.c_str()).x > room)
+            if (!p.compare(0, 3, "...")) p.erase(3, 1); else p = "..." + p.substr(1);
+        ImGui::TextUnformatted(p.c_str());
+    }
+    ImGui::SetCursorPosX(ix);
+    ImGui::AlignTextToFramePadding();
+    {   // the files' state: a dot, green when ready
+        ImVec2 q = ImGui::GetCursorScreenPos();
+        float fh = ImGui::GetFontSize();
+        dl->AddCircleFilled(ImVec2(q.x + fh * 0.35f, q.y + fh * 0.55f), fh * 0.28f,
+                            status.empty() ? IM_COL32(110, 230, 140, 255) : IM_COL32(255, 190, 80, 255));
+        ImGui::SetCursorPosX(ix + fh);
+        if (status.empty()) ImGui::TextColored(ImVec4(0.8f, 1, 0.85f, 1), "%s", L("Game files found, ready to play."));
+        else ImGui::TextColored(ImVec4(1, 0.85f, 0.5f, 1), "%s", L(status.c_str()));
+    }
+    ImGui::SetCursorPosX(ix);
+    ImGui::SameLine();
+    if (ImGui::Button(L("Change..."))) SDL_ShowOpenFolderDialog(kirby_picked, NULL, g_launcher_win, NULL, false);
+    ImGui::Dummy(ImVec2(0, 10 * s));
+    kirby_saves(ix);
+    float card_bottom = ImGui::GetCursorPosY() + pad - ImGui::GetStyle().ItemSpacing.y;
+    dl->ChannelsSetCurrent(0);
+    ImVec2 wp = ImGui::GetWindowPos();
+    dl->AddRectFilled(ImVec2(wp.x + cx, wp.y + cy), ImVec2(wp.x + cx + cw, wp.y + card_bottom), IM_COL32(30, 12, 50, 110), 26 * s);
+    dl->AddRect(ImVec2(wp.x + cx, wp.y + cy), ImVec2(wp.x + cx + cw, wp.y + card_bottom), IM_COL32(255, 255, 255, 60), 26 * s, 0, 2 * s);
+    dl->ChannelsMerge();
+    ImGui::PopStyleColor(8);
+    ImGui::PopStyleVar(3);
+    ImGui::PopFont();
+
+    // PLAY and Quit: right of the card when there's room, else under it
     ImGui::PushFont(g_font_menu);
-    ImGui::SetCursorPos(ImVec2(x0, fmaxf(ds.y - 230 * s, below)));
+    float bx = x0, by = card_bottom + 36 * s;
+    ImGui::SetCursorPos(ImVec2(bx, by));
     static bool focused;
     if (!focused && status.empty()) { ImGui::SetKeyboardFocusHere(); focused = true; }
     ImGui::BeginDisabled(!status.empty());
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.93f, 0.25f, 0.5f, 1));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 0.4f, 0.62f, 1));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.8f, 0.18f, 0.42f, 1));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 40 * s);
-    if (ImGui::Button("Play", ImVec2(360 * s, 110 * s))) play = true;
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 55 * s);
+    ImVec2 pa = ImGui::GetCursorScreenPos(), psz(380 * s, 100 * s);
+    dl->AddRectFilled(ImVec2(pa.x + 6 * s, pa.y + 10 * s), ImVec2(pa.x + psz.x + 6 * s, pa.y + psz.y + 10 * s),
+                      IM_COL32(60, 10, 40, 90), 55 * s);  // (a soft shadow)
+    if (ImGui::Button(i18n_upper(L("Play")).c_str(), psz)) play = true;
+    if (status.empty()) {  // a star twinkles on PLAY's corner now and then
+        float tt = fmodf((float)ImGui::GetTime(), 2.8f);
+        if (tt < 0.7f) {
+            float k = sinf(tt / 0.7f * 3.14159265f);
+            kirby_star(dl, ImVec2(pa.x + psz.x - 40 * s, pa.y + 26 * s), 16 * s * k, tt * 3, IM_COL32(255, 240, 150, (int)(230 * k)));
+        }
+    }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::EndDisabled();
+    ImGui::PopFont();
+    ImGui::PushFont(g_font_small);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 30 * s);
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1, 1, 1, 0.16f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.28f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.38f));
+    ImGui::SetCursorPos(ImVec2(bx + psz.x + 30 * s, by + psz.y * 0.5f - 30 * s));
+    if (ImGui::Button(L("Quit"), ImVec2(190 * s, 60 * s))) {
+        SDL_Event q = {};
+        q.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&q);
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar();
+    ImGui::SameLine(0, 40 * s);  // (the hint beside Quit)
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.7f), "%s", L("In game, F1 opens the menu: video, sound, controls."));
     ImGui::PopFont();
 }
 
